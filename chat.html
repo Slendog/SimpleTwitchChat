@@ -6,8 +6,10 @@
 <!--
   OBS browser-source Twitch chat with 7TV / BTTV / FFZ emotes, 7TV paints & badges.
 
-  Config: edit DEFAULTS below, or pass URL params, e.g.
-    file:///home/slendog/Projects/twitch_chat/chat.html?channel=xqc&size=22&fade=30
+  Config: pass URL params (OBS "Local file" unticked), e.g.
+    Linux/macOS: file:///home/slendog/Projects/twitch_chat/chat.html?channel=xqc&size=22&fade=30
+    Windows:     file:///C:/Users/YourName/Documents/twitch_chat/chat.html?channel=xqc&size=22&fade=30
+  or, with OBS "Local file" ticked (no URL params possible), edit DEFAULTS in the script below.
 
   Params:
     channel       Twitch channel login (required)
@@ -131,7 +133,6 @@
     justify-self: center;
     align-self: center;
   }
-  .stack > img.zw { max-width: none; }
 
   /* FFZ modifier effects. Each effect is its own wrapper so they stack. */
   .fx { display: inline-flex; align-items: center; }
@@ -238,22 +239,12 @@ const params = new URLSearchParams(location.search);
 const flag = (k) => params.has(k) ? !/^(0|false|no|off)$/i.test(params.get(k)) : DEFAULTS[k];
 const num = (k) => params.has(k) && !isNaN(+params.get(k)) ? +params.get(k) : DEFAULTS[k];
 
-const CONFIG = {
-  channel: (params.get('channel') || DEFAULTS.channel).toLowerCase().replace(/^#/, ''),
-  size: num('size'),
-  emoteScale: num('emoteScale'),
-  max: num('max'),
-  fade: num('fade'),
-  badges: flag('badges'),
-  paints: flag('paints'),
-  hideCommands: flag('hideCommands'),
-  notices: flag('notices'),
-  gifs: flag('gifs'),
-  gifHeight: num('gifHeight'),
-  prefetch: flag('prefetch'),
-  loader: flag('loader'),
-  font: params.get('font') || DEFAULTS.font,
-};
+// Each URL param is parsed according to the type of its default.
+const CONFIG = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) =>
+  [k, typeof v === 'boolean' ? flag(k) : typeof v === 'number' ? num(k) : params.get(k) || v]));
+CONFIG.channel = CONFIG.channel.toLowerCase().replace(/^#/, '');
+
+// hideBots adds to the default list instead of replacing it.
 const hiddenUsers = new Set(
   (DEFAULTS.hideBots + ',' + (params.get('hideBots') || '')).toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
 );
@@ -264,19 +255,28 @@ document.documentElement.style.setProperty('--gif', CONFIG.gifHeight + 'px');
 if (CONFIG.font) document.documentElement.style.setProperty('--font', CONFIG.font);
 
 // Pick image resolution from rendered emote height (assumes DPR 1 in OBS).
-const emotePx = CONFIG.size * CONFIG.emoteScale;
-const HI_RES = emotePx > 56;
+const HI_RES = CONFIG.size * CONFIG.emoteScale > 56;
 
 const chatEl = document.getElementById('chat');
 
 // ---------------------------------------------------------------- helpers
+// Times out after 10s: some APIs (FFZ especially) occasionally never answer,
+// which would otherwise stall loading forever.
 async function getJSON(url, opts) {
-  const r = await fetch(url, opts);
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000), ...opts });
   if (!r.ok) throw new Error(r.status + ' ' + url);
   return r.json();
 }
 
-// Limits concurrent requests (7TV per-user lookups in busy chats).
+// 404 = no account on that service; treat as empty.
+const orEmpty = (fallback) => (e) => { if (e.message.startsWith('404')) return fallback; throw e; };
+
+async function allSettledLogged(label, promises) {
+  const res = await Promise.allSettled(promises);
+  res.forEach(r => r.status === 'rejected' && console.warn(label, r.reason));
+}
+
+// Limits concurrent requests (7TV per-user lookups, image prefetch).
 function limiter(max) {
   let active = 0;
   const queue = [];
@@ -287,6 +287,50 @@ function limiter(max) {
     fn().then(resolve, reject).finally(() => { active--; next(); });
   };
   return (fn) => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); next(); });
+}
+
+// WebSocket that reconnects with exponential backoff (1s up to 30s).
+// With json: true, messages are sent and received as JSON.
+function reconnectingSocket(url, { onOpen, onMessage, json = false }) {
+  let ws;
+  let backoff = 1000;
+  const sock = {
+    send(data) { if (ws?.readyState === WebSocket.OPEN) ws.send(json ? JSON.stringify(data) : data); },
+    close() { ws?.close(); },
+  };
+  const open = () => {
+    ws = new WebSocket(url);
+    ws.onopen = () => { backoff = 1000; onOpen(sock); };
+    ws.onmessage = (ev) => {
+      if (!json) return onMessage(ev.data);
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
+      onMessage(m);
+    };
+    ws.onclose = () => {
+      setTimeout(open, backoff);
+      backoff = Math.min(backoff * 2, 30000);
+    };
+  };
+  open();
+  return sock;
+}
+
+function makeImg(src, alt, className) {
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = alt;
+  img.decoding = 'async';
+  if (className) img.className = className;
+  return img;
+}
+
+const stvAsset = (host, size) => `https:${host}/${size}.webp`;
+const byName = (list) => new Map(list.map(e => [e.name, e]));
+function buildMap(list, add) {
+  const m = new Map();
+  list.forEach(e => add(m, e));
+  return m;
 }
 
 // 7TV packs colors as signed 32-bit RGBA ints.
@@ -322,26 +366,28 @@ function readableColor(hex) {
 }
 
 // ---------------------------------------------------------------- emotes
+const CHANNEL_KEYS = ['stvChannel', 'bttvChannel', 'ffzChannel'];
+const GLOBAL_KEYS = ['stvGlobal', 'bttvGlobal', 'ffzGlobal'];
 // Lookup order: channel emotes beat globals; 7TV > BTTV > FFZ.
-const emoteMaps = {
-  stvChannel: new Map(),
-  bttvChannel: new Map(),
-  ffzChannel: new Map(),
-  stvGlobal: new Map(),
-  bttvGlobal: new Map(),
-  ffzGlobal: new Map(),
-};
-const LOOKUP_ORDER = ['stvChannel', 'bttvChannel', 'ffzChannel', 'stvGlobal', 'bttvGlobal', 'ffzGlobal'];
-// FFZ ignores supporter modifiers from non-supporters; we hide the word instead of showing it.
-function isFfzSupporterModifier(word) {
-  return ffzUserSets.some(s => s.map.get(word)?.hidden);
+const LOOKUP_ORDER = [...CHANNEL_KEYS, ...GLOBAL_KEYS];
+const emoteMaps = Object.fromEntries(LOOKUP_ORDER.map(k => [k, new Map()]));
+
+// Emote maps that apply to one chatter, highest priority first: their 7TV
+// personal sets, their FFZ supporter sets, then the shared channel/global maps.
+function scopesFor(userId, login) {
+  const scopes = [];
+  for (const id of userSets.get(userId) || []) {
+    const m = personalSets.get(id);
+    if (m) scopes.push(m);
+  }
+  for (const s of ffzUserSets) if (s.users.has(login)) scopes.push(s.map);
+  for (const k of LOOKUP_ORDER) scopes.push(emoteMaps[k]);
+  return scopes;
 }
 
-function findEmote(word, userId, login) {
-  const personal = (userId && personalEmote(userId, word)) || (login && ffzUserEmote(login, word));
-  if (personal) return personal;
-  for (const k of LOOKUP_ORDER) {
-    const e = emoteMaps[k].get(word);
+function findEmote(word, scopes) {
+  for (const m of scopes) {
+    const e = m.get(word);
     if (e) return e;
   }
   return null;
@@ -351,10 +397,9 @@ function findEmote(word, userId, login) {
 const BTTV_ZERO_WIDTH = new Set(['SoSnowy', 'IceCold', 'SantaHat', 'TopHat', 'ReinDeer', 'CandyCane', 'cvMask', 'cvHazmat']);
 
 function add7tv(map, e) {
-  const host = e.data?.host?.url || `//cdn.7tv.app/emote/${e.id}`;
   map.set(e.name, {
     name: e.name,
-    url: `https:${host}/${HI_RES ? '4x' : '2x'}.webp`,
+    url: stvAsset(e.data?.host?.url || `//cdn.7tv.app/emote/${e.id}`, HI_RES ? '4x' : '2x'),
     zw: Boolean((e.flags & 1) || (e.data?.flags & 256)),
   });
 }
@@ -366,6 +411,7 @@ function addBttv(map, e) {
     zw: BTTV_ZERO_WIDTH.has(e.code) || e.modifier === true,
   });
 }
+
 // FFZ modifier flags. Hidden modifiers only change the previous emote;
 // non-hidden modifiers are drawn on top of it (like 7TV zero-width).
 const FFZ_HIDDEN = 1;
@@ -390,17 +436,15 @@ function addFfz(map, e) {
   });
 }
 
-// Flattens FFZ API sets into one list of emoticons.
-const ffzEmotes = (sets, ids) => ids.flatMap(id => sets[id]?.emoticons || []);
+// Flattens FFZ API sets (all of them by default) into one list of emoticons.
+const ffzEmotes = (sets = {}, ids = Object.keys(sets)) => ids.flatMap(id => sets[id]?.emoticons || []);
 
 // FFZ supporter-only sets ("Subwoofer" effects), keyed by Twitch login.
-let ffzUserSets = []; // [{ users: Set(login), map }]
-function ffzUserEmote(login, word) {
-  for (const s of ffzUserSets) if (s.users.has(login)) {
-    const e = s.map.get(word);
-    if (e) return e;
-  }
-  return null;
+let ffzUserSets = [];              // [{ users: Set(login), map }]
+let ffzSupporterMods = new Set();  // their modifier names, hidden for non-supporters
+function setFfzUserSets(sets) {
+  ffzUserSets = sets;
+  ffzSupporterMods = new Set(sets.flatMap(s => [...s.map.values()].filter(e => e.hidden).map(e => e.name)));
 }
 
 // ---------------------------------------------------------------- 7TV personal emotes
@@ -408,24 +452,14 @@ function ffzUserEmote(login, word) {
 // 7TV announces who owns which set through EventAPI "entitlements" for this channel.
 const personalSets = new Map(); // emote set id -> Map(name -> emote)
 const userSets = new Map();     // twitch user id -> Set(emote set id)
-const fetchedSets = new Set();
-
-function personalEmote(userId, word) {
-  const sets = userSets.get(userId);
-  if (!sets) return null;
-  for (const id of sets) {
-    const e = personalSets.get(id)?.get(word);
-    if (e) return e;
-  }
-  return null;
-}
+const fetchedSets = new Set();  // set ids whose contents we already have or requested
 
 function personalSet(id) {
   if (!personalSets.has(id)) personalSets.set(id, new Map());
   return personalSets.get(id);
 }
 
-// Set contents usually arrive as events too; fetch once in case they don't.
+// Set contents usually arrive as events; fetch once if they haven't.
 function fetchPersonalSet(id) {
   if (fetchedSets.has(id)) return;
   fetchedSets.add(id);
@@ -441,34 +475,39 @@ function fetchPersonalSet(id) {
 const twitchIdOf = (user) => user?.connections?.find(c => c.platform === 'TWITCH')?.id;
 
 // A chatter's first message can arrive before their entitlement does;
-// re-render their visible messages once the emotes are known.
-function rerenderUser(userId) {
-  for (const body of chatEl.querySelectorAll(`.msg[data-user="${CSS.escape(userId)}"] .body`)) {
-    if (body._raw) body.replaceChildren(renderBody(body._raw.text, body._raw.emotes, userId, body._raw.login, body._raw.gifs));
+// re-render matching on-screen messages once the emotes are known.
+function rerenderMessages(match) {
+  for (const body of chatEl.querySelectorAll('.msg .body')) {
+    if (body._msg && match(body._msg)) body.replaceChildren(renderBody(body._msg));
   }
 }
-function rerenderSetOwners(setId) {
-  for (const [userId, sets] of userSets) if (sets.has(setId)) rerenderUser(userId);
-}
+const rerenderUser = (userId) => rerenderMessages(m => m.tags['user-id'] === userId);
+const rerenderSetOwners = (setId) => rerenderMessages(m => userSets.get(m.tags['user-id'])?.has(setId));
 
 function onEntitlement(type, obj) {
   const userId = twitchIdOf(obj.user);
   if (!userId) return;
   if (obj.kind === 'EMOTE_SET') {
+    const setId = obj.ref_id;
     if (type === 'entitlement.create') {
       if (!userSets.has(userId)) userSets.set(userId, new Set());
-      userSets.get(userId).add(obj.ref_id);
-      personalSet(obj.ref_id);
-      fetchPersonalSet(obj.ref_id);
+      userSets.get(userId).add(setId);
+      fetchPersonalSet(setId);
+      if (personalSet(setId).size) rerenderUser(userId);
     } else {
-      userSets.get(userId)?.delete(obj.ref_id);
+      const sets = userSets.get(userId);
+      sets?.delete(setId);
+      if (sets && !sets.size) userSets.delete(userId);
+      // Drop the set once nobody owns it, so long sessions don't accumulate them.
+      if (![...userSets.values()].some(s => s.has(setId))) {
+        personalSets.delete(setId);
+        fetchedSets.delete(setId);
+      }
+      rerenderUser(userId);
     }
-    rerenderUser(userId);
   } else if ((obj.kind === 'PAINT' || obj.kind === 'BADGE') && CONFIG.paints && obj.user.style) {
     // Seed the per-user cache so this chatter's paint shows on their first message.
-    const style = obj.user.style;
-    userStyleCache.set(userId, Promise.all([getCosmetic(style.paint_id), getCosmetic(style.badge_id)])
-      .then(([paint, badge]) => ({ paint, badge })));
+    cacheStyle(userId, resolveStyle(obj.user.style));
   }
 }
 
@@ -482,114 +521,109 @@ function applySetUpdate(map, body) {
   }
 }
 
-// One EventAPI connection: live channel emote changes, active emote set switches,
-// personal emotes, paints/badges.
-let stvWs = null;
-function stvSend(op, type, condition) {
-  if (stvWs?.readyState === WebSocket.OPEN) stvWs.send(JSON.stringify({ op, d: { type, condition } }));
-}
-const stvSub = (type, condition) => stvSend(35, type, condition);
-const stvUnsub = (type, condition) => stvSend(36, type, condition);
+// ---------------------------------------------------------------- live sockets
+// One 7TV EventAPI connection: live channel emote changes, active emote set
+// switches, personal emotes, paints/badges.
+let stvSock = null;
+const stvSend = (op, type, condition) => stvSock?.send({ op, d: { type, condition } });
 
-// Called whenever the channel's active 7TV emote set may have changed.
-function setChannelEmoteSet(setId) {
-  if (setId === channel.stvSetId) return;
-  if (channel.stvSetId) stvUnsub('emote_set.update', { object_id: channel.stvSetId });
-  channel.stvSetId = setId;
-  if (setId) stvSub('emote_set.update', { object_id: setId });
+// Subscriptions that follow the channel's current 7TV user and emote set.
+const STV_TRACKED = { stvSetId: 'emote_set.update', stvUserId: 'user.update' };
+function track(field, id) {
+  if (id === channel[field]) return;
+  const type = STV_TRACKED[field];
+  if (channel[field]) stvSend(36, type, { object_id: channel[field] });
+  channel[field] = id;
+  if (id) stvSend(35, type, { object_id: id });
 }
-function setChannelStvUser(userId) {
-  if (userId === channel.stvUserId) return;
-  if (channel.stvUserId) stvUnsub('user.update', { object_id: channel.stvUserId });
-  channel.stvUserId = userId;
-  if (userId) stvSub('user.update', { object_id: userId });
+
+function on7tvEvent(m) {
+  if (m.op !== 0 || !m.d) return;
+  const { type, body = {} } = m.d;
+
+  if (type === 'emote_set.update') {
+    if (body.id === channel.stvSetId) {
+      applySetUpdate(emoteMaps.stvChannel, body);
+      channelChanged('7TV emote set updated');
+    } else if (personalSets.has(body.id)) {
+      applySetUpdate(personalSets.get(body.id), body);
+      rerenderSetOwners(body.id);
+    }
+  } else if (type === 'user.update' && body.id === channel.stvUserId) {
+    // Covers the streamer switching their active emote set; just reload it.
+    load7tvChannel().then(() => channelChanged('7TV user updated'), e => console.warn('7tv reload', e));
+  } else if (type === 'emote_set.create' && body.object?.id) {
+    const map = personalSet(body.object.id);
+    (body.object.emotes || []).forEach(e => add7tv(map, e));
+    fetchedSets.add(body.object.id); // later updates arrive as events, no REST fetch needed
+  } else if (type?.startsWith('entitlement.') && body.object) {
+    onEntitlement(type, body.object);
+  } else if (type === 'cosmetic.create' && body.object?.data?.id) {
+    const { kind, data } = body.object;
+    if ((kind === 'PAINT' || kind === 'BADGE') && !cosmeticCache.has(data.id)) {
+      cosmeticCache.set(data.id, Promise.resolve({ kind: kind.toLowerCase(), ...data }));
+    }
+  }
 }
 
 function connect7tvEvents() {
-  stvWs = new WebSocket('wss://events.7tv.io/v3');
-  stvWs.onopen = () => {
-    if (channel.stvSetId) stvSub('emote_set.update', { object_id: channel.stvSetId });
-    if (channel.stvUserId) stvSub('user.update', { object_id: channel.stvUserId });
-    const ctx = { ctx: 'channel', platform: 'TWITCH', id: channel.roomId };
-    stvSub('entitlement.*', ctx);
-    stvSub('cosmetic.*', ctx);
-    stvSub('emote_set.*', ctx);
-  };
-  stvWs.onmessage = (ev) => {
-    let m;
-    try { m = JSON.parse(ev.data); } catch { return; }
-    if (m.op !== 0 || !m.d) return;
-    const { type, body = {} } = m.d;
-
-    if (type === 'emote_set.update') {
-      if (body.id === channel.stvSetId) {
-        applySetUpdate(emoteMaps.stvChannel, body);
-        channelChanged('7TV emote set updated');
-      } else if (personalSets.has(body.id)) {
-        applySetUpdate(personalSets.get(body.id), body);
-        rerenderSetOwners(body.id);
+  stvSock = reconnectingSocket('wss://events.7tv.io/v3', {
+    json: true,
+    onOpen: () => {
+      for (const [field, type] of Object.entries(STV_TRACKED)) {
+        if (channel[field]) stvSend(35, type, { object_id: channel[field] });
       }
-    } else if (type === 'user.update' && body.id === channel.stvUserId) {
-      // Covers the streamer switching their active emote set; just reload it.
-      load7tvChannel().then(() => channelChanged('7TV user updated'), e => console.warn('7tv reload', e));
-    } else if (type === 'emote_set.create' && body.object?.id) {
-      const map = personalSet(body.object.id);
-      (body.object.emotes || []).forEach(e => add7tv(map, e));
-    } else if (type?.startsWith('entitlement.') && body.object) {
-      onEntitlement(type, body.object);
-    } else if (type === 'cosmetic.create' && body.object?.data?.id) {
-      const { kind, data } = body.object;
-      if ((kind === 'PAINT' || kind === 'BADGE') && !cosmeticCache.has(data.id)) {
-        cosmeticCache.set(data.id, Promise.resolve({ kind: kind.toLowerCase(), ...data }));
-      }
-    }
-  };
-  stvWs.onclose = () => setTimeout(connect7tvEvents, 5000);
+      const ctx = { ctx: 'channel', platform: 'TWITCH', id: channel.roomId };
+      for (const type of ['entitlement.*', 'cosmetic.*', 'emote_set.*']) stvSend(35, type, ctx);
+    },
+    onMessage: on7tvEvent,
+  });
 }
 
 // BTTV pushes channel emote changes over its own socket.
 function connectBttvEvents() {
-  const ws = new WebSocket('wss://sockets.betterttv.net/ws');
   const room = `twitch:${channel.roomId}`;
-  ws.onopen = () => ws.send(JSON.stringify({ name: 'join_channel', data: { name: room } }));
-  ws.onmessage = (ev) => {
-    let m;
-    try { m = JSON.parse(ev.data); } catch { return; }
-    const d = m.data || {};
-    if (d.channel !== room) return;
-    const map = emoteMaps.bttvChannel;
-    const removeId = (id) => { for (const [k, e] of map) if (e.id === id) map.delete(k); };
-    if (m.name === 'emote_create' && d.emote) {
-      addBttv(map, d.emote);
-    } else if (m.name === 'emote_update' && d.emote) {
-      removeId(d.emote.id);
-      addBttv(map, d.emote);
-    } else if (m.name === 'emote_delete') {
-      removeId(d.emoteId);
-    } else {
-      return;
-    }
-    channelChanged('BTTV ' + m.name);
-  };
-  ws.onclose = () => setTimeout(connectBttvEvents, 5000);
+  reconnectingSocket('wss://sockets.betterttv.net/ws', {
+    json: true,
+    onOpen: (sock) => sock.send({ name: 'join_channel', data: { name: room } }),
+    onMessage: (m) => {
+      const d = m.data || {};
+      if (d.channel !== room) return;
+      const map = emoteMaps.bttvChannel;
+      const removeId = (id) => { for (const [k, e] of map) if (e.id === id) map.delete(k); };
+      if (m.name === 'emote_create' && d.emote) {
+        addBttv(map, d.emote);
+      } else if (m.name === 'emote_update' && d.emote) {
+        removeId(d.emote.id);
+        addBttv(map, d.emote);
+      } else if (m.name === 'emote_delete') {
+        removeId(d.emoteId);
+      } else {
+        return;
+      }
+      channelChanged('BTTV ' + m.name);
+    },
+  });
 }
 
 // ---------------------------------------------------------------- loading progress
-// Thin bar at the top: emote lists first (~20%), then image prefetch.
+// Thin bar at the top: emote lists first (~20%), then image prefetch. Lists
+// register themselves as they start; seal() marks that no more will come.
 const progress = (() => {
   const el = document.getElementById('loader');
   const fill = el.querySelector('.fill');
   const label = el.querySelector('.label');
-  let lists = 0, listsDone = 0, imgs = 0, imgsDone = 0, finished = false;
+  let lists = 0, listsDone = 0, imgs = 0, imgsDone = 0, sealed = false, finished = false;
   el.hidden = !CONFIG.loader;
 
   function render() {
     if (finished) return;
-    const lp = lists ? listsDone / lists : 1;
+    const listsLoading = !sealed || listsDone < lists;
+    const lp = lists ? listsDone / lists : 0;
     const ip = imgs ? imgsDone / imgs : 1;
-    const pct = CONFIG.prefetch ? 0.2 * lp + 0.8 * (listsDone < lists ? 0 : ip) : lp;
+    const pct = CONFIG.prefetch ? 0.2 * lp + 0.8 * (listsLoading ? 0 : ip) : lp;
     fill.style.width = (pct * 100).toFixed(1) + '%';
-    if (listsDone < lists) {
+    if (listsLoading) {
       label.textContent = `Loading emote lists… ${listsDone}/${lists}`;
     } else if (imgsDone < imgs) {
       label.textContent = `Loading emotes… ${imgsDone}/${imgs}`;
@@ -604,45 +638,18 @@ const progress = (() => {
   return {
     addLists(n) { lists += n; render(); },
     listDone() { listsDone++; render(); },
+    seal() { sealed = true; render(); },
     addImage() { imgs++; },
     imageDone() { imgsDone++; render(); },
     fail(text) { finished = true; label.textContent = text; fill.style.width = '100%'; fill.style.background = '#e53935'; },
   };
 })();
 
-// ---------------------------------------------------------------- cache
-// Emote lists are cached in localStorage so restarts render instantly;
-// fresh lists are still fetched every load and replace the cache.
-const RES = HI_RES ? 'hi' : 'lo';
-function cacheGet(key) {
-  try { return JSON.parse(localStorage.getItem('twitchchat:v2:' + key)); } catch { return null; }
-}
-function cacheSet(key, value) {
-  try { localStorage.setItem('twitchchat:v2:' + key, JSON.stringify(value)); } catch { /* full or blocked */ }
-}
-
-const GLOBAL_KEYS = ['stvGlobal', 'bttvGlobal', 'ffzGlobal'];
-const CHANNEL_KEYS = ['stvChannel', 'bttvChannel', 'ffzChannel'];
-const snapshot = (keys) => Object.fromEntries(keys.map(k => [k, [...emoteMaps[k].values()]]));
-function restore(snap) {
-  for (const [k, list] of Object.entries(snap || {})) {
-    if (emoteMaps[k]) emoteMaps[k] = new Map(list.map(e => [e.name, e]));
-  }
-}
-
-// Fresh lists go into a new Map that replaces the old one, so emotes the
-// channel removed since the cached copy disappear.
-function fillMap(key, list, add) {
-  const m = new Map();
-  list.forEach(e => add(m, e));
-  emoteMaps[key] = m;
-}
-
 // Each list queues its images before counting as done, so the bar never
 // reaches 100% while images are still unknown.
-async function settle(label, jobs) {
-  const res = await Promise.allSettled(jobs.map(j => j.then(prefetchAll).finally(() => progress.listDone())));
-  res.forEach(r => r.status === 'rejected' && console.warn(label, r.reason));
+function settle(label, jobs) {
+  progress.addLists(jobs.length);
+  return allSettledLogged(label, jobs.map(j => j.then(prefetchAll).finally(() => progress.listDone())));
 }
 
 // ---------------------------------------------------------------- twitch badges
@@ -656,55 +663,59 @@ function badgeMap(sets) {
 }
 
 // ---------------------------------------------------------------- loaders
+// Fresh lists go into a new Map that replaces the old one, so emotes the
+// channel removed since the cached copy disappear.
+const fillMap = (key, list, add) => { emoteMaps[key] = buildMap(list, add); };
+
 const channelBots = new Set();
+function addChannelBots(list) {
+  for (const b of list) {
+    channelBots.add(b.toLowerCase());
+    hiddenUsers.add(b.toLowerCase());
+  }
+}
+
+async function loadGlobalBadges() {
+  if (CONFIG.badges) badgeMaps.global = badgeMap(await getJSON('https://api.ivr.fi/v2/twitch/badges/global'));
+}
 
 async function loadGlobal() {
-  const jobs = [
+  await settle('global', [
     getJSON('https://7tv.io/v3/emote-sets/global').then(d => fillMap('stvGlobal', d.emotes || [], add7tv)),
     getJSON('https://api.betterttv.net/3/cached/emotes/global').then(d => fillMap('bttvGlobal', d, addBttv)),
     getJSON('https://api.frankerfacez.com/v1/set/global').then(d => {
       fillMap('ffzGlobal', ffzEmotes(d.sets, d.default_sets || []), addFfz);
-      ffzUserSets = Object.entries(d.users || {}).map(([id, users]) => {
-        const map = new Map();
-        ffzEmotes(d.sets, [id]).forEach(e => addFfz(map, e));
-        return { users: new Set(users.map(u => u.toLowerCase())), map };
-      });
+      setFfzUserSets(Object.entries(d.users || {}).map(([id, users]) => ({
+        users: new Set(users.map(u => u.toLowerCase())),
+        map: buildMap(ffzEmotes(d.sets, [id]), addFfz),
+      })));
     }),
-  ];
-  if (CONFIG.badges) {
-    jobs.push(getJSON('https://api.ivr.fi/v2/twitch/badges/global').then(d => { badgeMaps.global = badgeMap(d); }));
-  }
-  await settle('global', jobs);
-  cacheSet('global:' + RES, {
-    emotes: snapshot(GLOBAL_KEYS),
-    badges: [...badgeMaps.global],
-    ffzUserSets: ffzUserSets.map(s => ({ users: [...s.users], emotes: [...s.map.values()] })),
-  });
+    loadGlobalBadges(),
+  ]);
+  saveGlobalCache();
 }
 
 // Current channel state; filled in once the room id is known.
 const channel = { roomId: null, stvUserId: null, stvSetId: null };
 
-// 404 = channel has no account on that service; treat as "no emotes".
-const orEmpty = (fallback) => (e) => { if (e.message.startsWith('404')) return fallback; throw e; };
+const stvTwitchUser = (id) => getJSON(`https://7tv.io/v3/users/twitch/${id}`).catch(orEmpty({}));
 
 async function load7tvChannel() {
-  const d = await getJSON(`https://7tv.io/v3/users/twitch/${channel.roomId}`).catch(orEmpty({}));
+  const d = await stvTwitchUser(channel.roomId);
   fillMap('stvChannel', d.emote_set?.emotes || [], add7tv);
-  setChannelStvUser(d.user?.id || null);
-  setChannelEmoteSet(d.emote_set?.id || null);
+  track('stvUserId', d.user?.id || null);
+  track('stvSetId', d.emote_set?.id || null);
 }
 
 async function loadBttvChannel() {
   const d = await getJSON(`https://api.betterttv.net/3/cached/users/twitch/${channel.roomId}`).catch(orEmpty({}));
   fillMap('bttvChannel', [...(d.channelEmotes || []), ...(d.sharedEmotes || [])], addBttv);
-  (d.bots || []).forEach(b => channelBots.add(b.toLowerCase()));
-  channelBots.forEach(b => hiddenUsers.add(b));
+  addChannelBots(d.bots || []);
 }
 
 async function loadFfzChannel() {
-  const d = await getJSON(`https://api.frankerfacez.com/v1/room/id/${channel.roomId}`).catch(orEmpty({ sets: {} }));
-  fillMap('ffzChannel', ffzEmotes(d.sets, Object.keys(d.sets || {})), addFfz);
+  const d = await getJSON(`https://api.frankerfacez.com/v1/room/id/${channel.roomId}`).catch(orEmpty({}));
+  fillMap('ffzChannel', ffzEmotes(d.sets), addFfz);
 }
 
 async function loadChannelBadges() {
@@ -712,27 +723,19 @@ async function loadChannelBadges() {
   badgeMaps.channel = badgeMap(await getJSON(`https://api.ivr.fi/v2/twitch/badges/channel?id=${channel.roomId}`));
 }
 
-function saveChannelCache() {
-  cacheSet(`channel:${CONFIG.channel}:${RES}`, {
-    roomId: channel.roomId,
-    emotes: snapshot(CHANNEL_KEYS),
-    badges: [...badgeMaps.channel],
-    bots: [...channelBots],
-  });
-}
-
-// After any live change: keep the cache current and preload new images.
+// After live changes: save the cache and preload new images, batched so a
+// burst of edits (or a set switch) costs one write.
+let changeTimer = null;
 function channelChanged(why) {
   console.log('emotes changed:', why);
-  saveChannelCache();
-  prefetchAll();
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(() => { saveChannelCache(); prefetchAll(); }, 2000);
 }
 
-// Full re-check of every source. Live sockets cover 7TV and BTTV; this catches
-// FFZ (no live feed) and anything a socket missed while disconnected.
+// Live sockets cover 7TV and BTTV; FFZ has no live feed so it's polled, and a
+// slower full re-check catches anything a socket missed while disconnected.
 async function refreshChannel(loaders) {
-  const res = await Promise.allSettled(loaders.map(fn => fn()));
-  res.forEach(r => r.status === 'rejected' && console.warn('refresh', r.reason));
+  await allSettledLogged('refresh', loaders.map(fn => fn()));
   channelChanged('periodic refresh');
 }
 
@@ -741,16 +744,14 @@ const FULL_REFRESH_MS = 15 * 60 * 1000;
 
 async function loadChannel(roomId) {
   channel.roomId = roomId;
-  const jobs = [load7tvChannel(), loadBttvChannel(), loadFfzChannel()];
-  if (CONFIG.badges) jobs.push(loadChannelBadges());
-  await settle('channel', jobs);
+  await settle('channel', [load7tvChannel(), loadBttvChannel(), loadFfzChannel(), loadChannelBadges()]);
   saveChannelCache();
   console.log('emotes loaded', Object.fromEntries(Object.entries(emoteMaps).map(([k, m]) => [k, m.size])));
 
   connect7tvEvents();
   connectBttvEvents();
   setInterval(() => refreshChannel([loadFfzChannel]), FFZ_REFRESH_MS);
-  setInterval(() => refreshChannel([load7tvChannel, loadBttvChannel, loadFfzChannel, loadChannelBadges]), FULL_REFRESH_MS);
+  setInterval(() => refreshChannel([load7tvChannel, loadBttvChannel, loadChannelBadges]), FULL_REFRESH_MS);
 }
 
 // Room id comes from whichever answers first: cache, ivr.fi lookup, or IRC ROOMSTATE.
@@ -766,11 +767,62 @@ function lookupRoomId() {
     .catch(() => { /* ROOMSTATE will still provide it */ });
 }
 
+// ---------------------------------------------------------------- cache
+// Emote lists are cached in localStorage so restarts render instantly;
+// fresh lists are still fetched every load and replace the cache.
+const RES = HI_RES ? 'hi' : 'lo';
+const GLOBAL_CACHE = 'global:' + RES;
+const CHANNEL_CACHE = `channel:${CONFIG.channel}:${RES}`;
+function cacheGet(key) {
+  try { return JSON.parse(localStorage.getItem('twitchchat:v2:' + key)); } catch { return null; }
+}
+function cacheSet(key, value) {
+  try { localStorage.setItem('twitchchat:v2:' + key, JSON.stringify(value)); } catch { /* full or blocked */ }
+}
+
+const snapshot = (keys) => Object.fromEntries(keys.map(k => [k, [...emoteMaps[k].values()]]));
+function restore(snap) {
+  for (const [k, list] of Object.entries(snap || {})) if (emoteMaps[k]) emoteMaps[k] = byName(list);
+}
+
+function saveGlobalCache() {
+  cacheSet(GLOBAL_CACHE, {
+    emotes: snapshot(GLOBAL_KEYS),
+    badges: [...badgeMaps.global],
+    ffzUserSets: ffzUserSets.map(s => ({ users: [...s.users], emotes: [...s.map.values()] })),
+  });
+}
+function restoreGlobalCache() {
+  const c = cacheGet(GLOBAL_CACHE);
+  if (!c) return false;
+  restore(c.emotes);
+  badgeMaps.global = new Map(c.badges || []);
+  setFfzUserSets((c.ffzUserSets || []).map(s => ({ users: new Set(s.users), map: byName(s.emotes) })));
+  return true;
+}
+
+function saveChannelCache() {
+  cacheSet(CHANNEL_CACHE, {
+    roomId: channel.roomId,
+    emotes: snapshot(CHANNEL_KEYS),
+    badges: [...badgeMaps.channel],
+    bots: [...channelBots],
+  });
+}
+function restoreChannelCache() {
+  const c = cacheGet(CHANNEL_CACHE);
+  if (!c) return false;
+  restore(c.emotes);
+  badgeMaps.channel = new Map(c.badges || []);
+  addChannelBots(c.bots || []);
+  resolveRoomId(c.roomId);
+  return true;
+}
+
 // ---------------------------------------------------------------- image prefetch
-// Downloads every emote/badge image once so the first use shows instantly.
-// Channel emotes go first. Image objects are kept so they stay in memory cache.
+// Downloads every emote/badge image once so first use is instant; afterwards
+// they're served from the browser's disk cache. Channel emotes go first.
 const prefetched = new Set();
-const prefetchKeep = [];
 const imgLimit = limiter(24);
 // Twitch has ~600 global badges; only these show up in most chats.
 const COMMON_BADGES = /^(broadcaster|moderator|vip|subscriber|founder|partner|verified|staff|premium|turbo|artist-badge|no_audio|no_video|bits|sub-gifter|sub-gift-leader|bits-leader|glhf-pledge|predictions)\//;
@@ -784,11 +836,14 @@ function prefetchAll() {
     if (!url || prefetched.has(url)) continue;
     prefetched.add(url);
     progress.addImage();
+    // Plain load, not img.decode(): decoding ~1000 images up front is far slower
+    // and the browser decodes on first paint anyway. A CDN that stalls a download
+    // frees its slot after 15s so the rest (and the progress bar) keep going.
     imgLimit(() => new Promise(resolve => {
       const img = new Image();
       img.onload = img.onerror = resolve;
+      setTimeout(resolve, 15000);
       img.src = url;
-      prefetchKeep.push(img);
     })).then(() => progress.imageDone());
   }
 }
@@ -810,7 +865,8 @@ function markReady() {
 
 // ---------------------------------------------------------------- 7TV cosmetics
 const stvLimit = limiter(4);
-const userStyleCache = new Map(); // twitch user id -> Promise<{paint, badge}|null>
+const userStyleCache = new Map(); // twitch user id -> Promise<{paint, badge}|null>, oldest first
+const STYLE_CACHE_MAX = 5000;
 const cosmeticCache = new Map();  // cosmetic id -> Promise<cosmetic|null>
 let pendingCosmetics = new Map();
 let cosmeticTimer = null;
@@ -852,17 +908,22 @@ async function flushCosmetics() {
   for (const [id, resolve] of batch) resolve(found.get(id) || null);
 }
 
+const resolveStyle = (style) => Promise.all([getCosmetic(style?.paint_id), getCosmetic(style?.badge_id)])
+  .then(([paint, badge]) => ({ paint, badge }));
+
+// Bounded so a multi-hour session in a busy chat doesn't keep every chatter forever.
+function cacheStyle(userId, promise) {
+  userStyleCache.delete(userId);
+  userStyleCache.set(userId, promise);
+  if (userStyleCache.size > STYLE_CACHE_MAX) userStyleCache.delete(userStyleCache.keys().next().value);
+}
+
 function get7tvStyle(userId) {
   if (!CONFIG.paints || !userId) return Promise.resolve(null);
   if (!userStyleCache.has(userId)) {
-    userStyleCache.set(userId, stvLimit(async () => {
-      const r = await fetch(`https://7tv.io/v3/users/twitch/${userId}`);
-      if (!r.ok) return null; // 404 = no 7TV account
-      const d = await r.json();
-      const style = d.user?.style || {};
-      const [paint, badge] = await Promise.all([getCosmetic(style.paint_id), getCosmetic(style.badge_id)]);
-      return { paint, badge };
-    }).catch(() => null));
+    cacheStyle(userId, stvLimit(() => stvTwitchUser(userId))
+      .then(d => d.user ? resolveStyle(d.user.style) : null) // no user = no 7TV account
+      .catch(() => null));
   }
   return userStyleCache.get(userId);
 }
@@ -896,7 +957,7 @@ function applyPaint(nameEl, paint, baseColor) {
 }
 
 // ---------------------------------------------------------------- rendering
-// Wide (ffzW): stretch every image in the stack to twice its natural width.
+// Wide (ffzW): stretch an image to twice its natural width.
 function widenImg(img) {
   const set = () => { img.style.aspectRatio = `${img.naturalWidth * 2} / ${img.naturalHeight}`; };
   if (img.complete && img.naturalWidth) set();
@@ -905,7 +966,7 @@ function widenImg(img) {
 
 function applyEffects(em, flags) {
   if (flags & FFZ_WIDE) {
-    em.stack.classList.add('wide');
+    em.wide = true;
     em.stack.querySelectorAll('img').forEach(widenImg);
   }
   for (const [bit, cls] of FFZ_EFFECTS) {
@@ -915,15 +976,6 @@ function applyEffects(em, flags) {
     fx.append(...em.outer.childNodes);
     em.outer.appendChild(fx);
   }
-}
-
-function emoteImg(url, alt, zw) {
-  const img = document.createElement('img');
-  img.src = url;
-  img.alt = alt;
-  img.decoding = 'async';
-  if (zw) img.className = 'zw';
-  return img;
 }
 
 // Twitch chat GIFs (GIPHY): "start-end|gifID|gifURL", comma-separated. Split only
@@ -937,22 +989,23 @@ function parseGifs(tag) {
   return out;
 }
 
-function renderBody(text, emotesTag, userId, login, gifsTag) {
+// msg: { text, tags, login }. Kept on the element so it can be re-rendered.
+function renderBody(msg) {
+  const { text, tags, login } = msg;
+  const scopes = scopesFor(tags['user-id'], login);
   const frag = document.createDocumentFragment();
   const chars = Array.from(text); // Twitch emote indices count code points
 
   const ranges = [];
-  if (emotesTag) {
-    for (const part of emotesTag.split('/')) {
-      const [id, pos] = part.split(':');
-      if (!pos) continue;
-      for (const r of pos.split(',')) {
-        const [s, e] = r.split('-').map(Number);
-        ranges.push({ s, e, id });
-      }
+  for (const part of tags.emotes ? tags.emotes.split('/') : []) {
+    const [id, pos] = part.split(':');
+    if (!pos) continue;
+    for (const r of pos.split(',')) {
+      const [s, e] = r.split('-').map(Number);
+      ranges.push({ s, e, id });
     }
   }
-  if (CONFIG.gifs) ranges.push(...parseGifs(gifsTag));
+  if (CONFIG.gifs) ranges.push(...parseGifs(tags.gifs));
   ranges.sort((a, b) => a.s - b.s);
 
   let lastEmote = null;
@@ -966,8 +1019,8 @@ function renderBody(text, emotesTag, userId, login, gifsTag) {
     if (lastEmote && (e.zw || e.hidden)) {
       pendingSpace = '';
       if (e.zw) {
-        const img = emoteImg(e.url, e.name, true);
-        if (lastEmote.stack.classList.contains('wide')) widenImg(img);
+        const img = makeImg(e.url, e.name);
+        if (lastEmote.wide) widenImg(img);
         lastEmote.stack.appendChild(img);
       }
       if (e.mod) applyEffects(lastEmote, e.mod);
@@ -980,18 +1033,19 @@ function renderBody(text, emotesTag, userId, login, gifsTag) {
     outer.title = e.name;
     const stack = document.createElement('span');
     stack.className = 'stack';
-    stack.appendChild(emoteImg(e.url, e.name, false));
+    stack.appendChild(makeImg(e.url, e.name));
     outer.appendChild(stack);
     frag.appendChild(outer);
-    lastEmote = { outer, stack };
+    lastEmote = { outer, stack, wide: false };
   };
   const pushText = (str) => {
     for (const tok of str.split(/(\s+)/)) {
       if (!tok) continue;
       if (/^\s+$/.test(tok)) { pendingSpace += ' '; continue; }
-      const e = findEmote(tok, userId, login);
+      const e = findEmote(tok, scopes);
       if (e) { pushEmote(e); continue; }
-      if (lastEmote && isFfzSupporterModifier(tok)) { pendingSpace = ''; continue; }
+      // FFZ ignores supporter modifiers from non-supporters; hide the word.
+      if (lastEmote && ffzSupporterMods.has(tok)) { pendingSpace = ''; continue; }
       flushSpace();
       if (/^@\w+/.test(tok)) {
         const span = document.createElement('span');
@@ -1013,10 +1067,8 @@ function renderBody(text, emotesTag, userId, login, gifsTag) {
     if (r.gif) {
       // The placeholder text ("[Title GIF by X]") becomes the image; URL used as given.
       flushSpace();
-      const img = document.createElement('img');
-      img.className = 'gif';
-      img.src = r.gif;
-      img.alt = img.title = name.replace(/^\[|\]$/g, '');
+      const img = makeImg(r.gif, name.replace(/^\[|\]$/g, ''), 'gif');
+      img.title = img.alt;
       frag.appendChild(img);
       lastEmote = null;
     } else {
@@ -1041,9 +1093,9 @@ function addLine(el) {
 }
 
 function renderMessage(tags, login, text, { notice = null } = {}) {
-  let action = false;
-  const am = /^\u0001ACTION (.*)\u0001?$/.exec(text);
-  if (am) { action = true; text = am[1].replace(/\u0001$/, ''); }
+  const am = /^\u0001ACTION (.*?)\u0001?$/.exec(text);
+  const action = Boolean(am);
+  if (am) text = am[1];
 
   const el = document.createElement('div');
   el.className = 'msg' + (action ? ' action' : '') + (notice ? ' notice' : '');
@@ -1065,7 +1117,7 @@ function renderMessage(tags, login, text, { notice = null } = {}) {
   if (CONFIG.badges && tags.badges) {
     for (const b of tags.badges.split(',')) {
       const url = getBadge(b);
-      if (url) badges.appendChild(Object.assign(document.createElement('img'), { src: url, alt: b }));
+      if (url) badges.appendChild(makeImg(url, b));
     }
   }
 
@@ -1082,8 +1134,8 @@ function renderMessage(tags, login, text, { notice = null } = {}) {
   const body = document.createElement('span');
   body.className = 'body';
   if (action) body.style.color = color;
-  body._raw = { text, emotes: tags.emotes, login, gifs: tags.gifs };
-  body.appendChild(renderBody(text, tags.emotes, tags['user-id'], login, tags.gifs));
+  body._msg = { text, tags, login };
+  body.appendChild(renderBody(body._msg));
 
   el.append(badges, name, colon, body);
   addLine(el);
@@ -1091,10 +1143,7 @@ function renderMessage(tags, login, text, { notice = null } = {}) {
   get7tvStyle(tags['user-id']).then(style => {
     if (!style || !el.isConnected) return;
     if (style.badge?.host?.url) {
-      badges.appendChild(Object.assign(document.createElement('img'), {
-        src: `https:${style.badge.host.url}/${HI_RES ? '3x' : '2x'}.webp`,
-        alt: style.badge.tooltip || style.badge.name,
-      }));
+      badges.appendChild(makeImg(stvAsset(style.badge.host.url, HI_RES ? '3x' : '2x'), style.badge.tooltip || style.badge.name));
     }
     if (style.paint) applyPaint(name, style.paint, color);
   });
@@ -1140,45 +1189,44 @@ function parseIRC(line) {
   return msg;
 }
 
-let backoff = 1000;
+let irc;
+
+// Connection-level commands run immediately; everything else waits for the
+// emote lists (see chat gating) so chat and moderation events keep their order.
+const IMMEDIATE = new Set(['PING', 'RECONNECT', 'ROOMSTATE']);
 
 function handle(msg) {
   switch (msg.command) {
     case 'PING':
-      ws.send('PONG :' + (msg.params[0] || 'tmi.twitch.tv'));
+      irc.send('PONG :' + (msg.params[0] || 'tmi.twitch.tv'));
       break;
     case 'RECONNECT':
-      ws.close();
+      irc.close();
       break;
-    case 'ROOMSTATE': {
+    case 'ROOMSTATE':
       if (msg.tags['room-id']) resolveRoomId(msg.tags['room-id']);
       break;
-    }
     case 'PRIVMSG': {
       const login = msg.prefix.split('!')[0];
       const text = msg.params[1] || '';
       if (hiddenUsers.has(login)) return;
       if (CONFIG.hideCommands && text.startsWith('!')) return;
-      whenReady(() => renderMessage(msg.tags, login, text));
+      renderMessage(msg.tags, login, text);
       break;
     }
     case 'USERNOTICE': {
-      if (!CONFIG.notices) return;
       const sys = msg.tags['system-msg'];
-      if (!sys) return;
-      whenReady(() => renderMessage(msg.tags, msg.tags.login || '', msg.params[1] || '', { notice: sys }));
+      if (CONFIG.notices && sys) renderMessage(msg.tags, msg.tags.login || '', msg.params[1] || '', { notice: sys });
       break;
     }
     case 'CLEARCHAT': {
       const uid = msg.tags['target-user-id'];
-      if (!chatReady) return whenReady(() => handle(msg));
       if (uid) chatEl.querySelectorAll(`[data-user="${CSS.escape(uid)}"]`).forEach(e => e.remove());
       else chatEl.replaceChildren();
       break;
     }
     case 'CLEARMSG': {
       const id = msg.tags['target-msg-id'];
-      if (!chatReady) return whenReady(() => handle(msg));
       if (id) chatEl.querySelector(`[data-id="${CSS.escape(id)}"]`)?.remove();
       break;
     }
@@ -1188,58 +1236,42 @@ function handle(msg) {
   }
 }
 
-let ws;
-function connect() {
-  ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
-  ws.onopen = () => {
-    backoff = 1000;
-    ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
-    ws.send('PASS SCHMOOPIIE');
-    ws.send('NICK justinfan' + Math.floor(10000 + Math.random() * 80000));
-    ws.send('JOIN #' + CONFIG.channel);
-    status(`Connected to #${CONFIG.channel}`);
-  };
-  ws.onmessage = (ev) => {
-    for (const line of ev.data.split('\r\n')) if (line) handle(parseIRC(line));
-  };
-  ws.onclose = () => {
-    setTimeout(connect, backoff);
-    backoff = Math.min(backoff * 2, 30000);
-  };
+function connectChat() {
+  irc = reconnectingSocket('wss://irc-ws.chat.twitch.tv:443', {
+    onOpen: (sock) => {
+      sock.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+      sock.send('PASS SCHMOOPIIE');
+      sock.send('NICK justinfan' + Math.floor(10000 + Math.random() * 80000));
+      sock.send('JOIN #' + CONFIG.channel);
+      status(`Connected to #${CONFIG.channel}`);
+    },
+    onMessage: (data) => {
+      for (const line of data.split('\r\n')) {
+        if (!line) continue;
+        const msg = parseIRC(line);
+        if (IMMEDIATE.has(msg.command)) handle(msg);
+        else whenReady(() => handle(msg));
+      }
+    },
+  });
 }
 
 // ---------------------------------------------------------------- start
-if (!CONFIG.channel || CONFIG.channel === 'channel_name_here') {
+if (!CONFIG.channel || CONFIG.channel === DEFAULTS.channel.toLowerCase()) {
   status('Set ?channel=yourchannel in the URL or edit DEFAULTS.channel in chat.html', 0);
 } else {
-  progress.addLists(CONFIG.badges ? 8 : 6);
-
   // Restore cached lists first so chat can render emotes immediately.
-  const cachedGlobal = cacheGet('global:' + RES);
-  const cachedChannel = cacheGet(`channel:${CONFIG.channel}:${RES}`);
-  if (cachedGlobal) {
-    restore(cachedGlobal.emotes);
-    badgeMaps.global = new Map(cachedGlobal.badges || []);
-    ffzUserSets = (cachedGlobal.ffzUserSets || []).map(s => ({
-      users: new Set(s.users),
-      map: new Map(s.emotes.map(e => [e.name, e])),
-    }));
-  }
-  if (cachedChannel) {
-    restore(cachedChannel.emotes);
-    badgeMaps.channel = new Map(cachedChannel.badges || []);
-    (cachedChannel.bots || []).forEach(b => { channelBots.add(b); hiddenUsers.add(b); });
-    resolveRoomId(cachedChannel.roomId);
-  }
+  const cachedGlobal = restoreGlobalCache();
+  const cachedChannel = restoreChannelCache();
   if (cachedGlobal && cachedChannel) markReady();
   prefetchAll();
 
   // Everything below runs in parallel.
-  connect();
+  connectChat();
   lookupRoomId();
   const globalDone = loadGlobal();
   const channelDone = roomIdReady.then(loadChannel);
-  Promise.all([globalDone, channelDone]).then(markReady);
+  Promise.all([globalDone, channelDone]).then(() => { progress.seal(); markReady(); });
   setTimeout(markReady, 8000);
 }
 </script>

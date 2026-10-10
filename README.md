@@ -6,22 +6,78 @@ It connects to chat anonymously, so no login or token is needed. There's nothing
 
 ## OBS setup
 
+There are two ways to load the overlay in OBS. Both use a **Browser** source.
+
+| | Option A: URL | Option B: Local file |
+|---|---|---|
+| Where settings live | In the URL (`?channel=…&size=…`) | In the `DEFAULTS` block inside `chat.html` |
+| Change a setting | Edit the URL in OBS | Edit `chat.html`, then refresh the source |
+| Several overlays (channels or styles) from one file | Yes, one URL each | No; copy the file once per setup |
+
+Either way, set the source's width/height to about `450 × 900`, or whatever fits your layout. The background is transparent, so no custom CSS is needed.
+
+### Option A: URL with options (recommended)
+
 1. Add a **Browser** source.
 2. **Untick "Local file"**.
-3. Set **URL** to:
+3. Set **URL** to the file's path in `file:///` form, with your options added after `?`:
+
+   **Linux / macOS**
    ```
    file:///home/slendog/Projects/twitch_chat/chat.html?channel=YOURCHANNEL
    ```
-4. Set width/height to about `450 × 900`, or whatever fits your layout.
 
-The background is transparent, so no custom CSS is needed in OBS.
+   **Windows**
+   ```
+   file:///C:/Users/YourName/Documents/twitch_chat/chat.html?channel=YOURCHANNEL
+   ```
 
-> If you'd rather keep "Local file" ticked, edit `DEFAULTS.channel` at the top of the
-> `<script>` in `chat.html`, since that mode may not pass `?channel=` through.
+   Windows path rules:
+   - Use forward slashes `/`, not backslashes `\`.
+   - Start with `file:///` (three slashes), then the drive letter.
+   - Write any space in the path as `%20`, e.g. `C:/Users/John%20Smith/…`.
+   - To get the path, right-click `chat.html` in Explorer → **Copy as path**, then swap `\` for `/` and remove the quotes.
+
+### Option B: Local file + edit the defaults in the file
+
+In "Local file" mode, OBS opens the file directly and you can't add `?channel=…` options. All settings come from the `DEFAULTS` block in `chat.html` instead.
+
+1. Open `chat.html` in a text editor (Notepad, VS Code, Kate, …).
+2. Find `const DEFAULTS = {` near the top of the `<script>` section and change the values you need. At minimum, set `channel`:
+   ```js
+   const DEFAULTS = {
+     channel: 'yourchannel',   // ← your Twitch channel name
+     size: 24,                 // font size in px
+     emoteScale: 1.6,
+     max: 40,
+     fade: 30,                 // fade messages after 30s (0 = never)
+     badges: true,
+     paints: true,
+     hideCommands: true,
+     notices: true,
+     gifs: true,
+     gifHeight: 150,
+     prefetch: true,
+     loader: true,
+     hideBots: 'nightbot,streamelements,streamlabs,moobot,fossabot,wizebot,sery_bot,soundalerts,kofistreambot',
+     font: '',                 // e.g. 'Comic Sans MS'
+   };
+   ```
+   - Keep text values in quotes (`'yourchannel'`).
+   - Use `true`/`false` for on/off options, and plain numbers for sizes and times.
+   - Keep the comma at the end of each line.
+3. Save the file.
+4. In OBS, add a **Browser** source, **tick "Local file"**, click **Browse** and pick `chat.html`.
+5. After any later edit to `chat.html`, open the source's properties and click **"Refresh cache of current page"**, or untick and re-tick the source's visibility.
+
+Tips:
+- **More than one setup** (different channels or looks): make a copy per setup, e.g. `chat-xqc.html` and `chat-mine.html`, each with its own `DEFAULTS`.
+- **Keep your settings when updating:** if you replace `chat.html` with a newer version, copy your `DEFAULTS` block over first, or it goes back to the stock values.
+- **Both modes at once:** URL options still override `DEFAULTS` in Option A. You can put your usual settings in `DEFAULTS` and only add `?channel=…` in the URL.
 
 ## Options
 
-Add options to the URL with `&`. Each one can also be set permanently in the `DEFAULTS` block at the top of the script in `chat.html`.
+Add options to the URL with `&` (Option A). Each one can also be set in the `DEFAULTS` block at the top of the script in `chat.html` (Option B; the names are the same).
 
 | Option         | Default      | Description |
 |----------------|--------------|-------------|
