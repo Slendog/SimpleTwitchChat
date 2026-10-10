@@ -1,0 +1,395 @@
+/* ==========================================================================
+   Example theme: cloud bubbles for chat.html
+   ==========================================================================
+
+   Shows the chatter's badges and name on their own line, with the message
+   underneath inside a white cloud. Use it as is, or as a starting point to
+   learn how to restyle the overlay.
+
+        [badge] Username
+        .-~-~-~-~-~-~-~-~-.
+       (  the message text  )
+        '~-~-~-~-~-~-~-~-~'
+
+   A second layout, with the name sitting ON the cloud's top edge, is at the
+   end of the file (section 7). Uncomment it to switch.
+
+   How to use:
+     OBS → browser source → Properties → paste this whole file into
+     "Custom CSS" → OK. chat.html itself stays unchanged.
+     (You can also paste it at the end of the <style> block in chat.html.)
+
+   How it works, in short:
+     - Each message looks like this in the page (see the README selector table):
+         <div class="msg">
+           <span class="badges">…</span> <span class="name">…</span>
+           <span class="colon">:</span>  <span class="body">message…</span>
+         </div>
+     - The colon is hidden and .body is turned into a block, so it drops onto
+       its own line below the name. That alone splits name and message.
+     - The cloud is drawn behind .body (not behind the whole message) by two
+       pseudo-elements:
+         .body::before  the white cloud
+         .body::after   a copy of the same shape, shifted down, used as a shadow
+     - The bumpy outline comes from a CSS mask: a stack of circles and ovals.
+       Wherever the mask has a shape the cloud color shows; everywhere else it's
+       cut away. See the big comment in section 4.
+
+   Note on !important:
+     The overlay sets --size, --emote, --gif and --font from the URL options as
+     inline styles, which win over normal CSS. Changing those needs !important.
+     Nothing in this theme touches them, so nothing here needs it.
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   1. Settings: change these to restyle the clouds.
+   Variables on :root are visible to every element on the page.
+   -------------------------------------------------------------------------- */
+:root {
+  --cloud: rgba(255, 255, 255, .96);      /* cloud fill. Last number = opacity (1 = solid) */
+  --cloud-shade: rgba(90, 120, 170, .35); /* shadow under each cloud. Bluish looks more "sky" than gray */
+  --cloud-text: #2b3446;                  /* message text. Dark, because the cloud is light */
+  --puff: .8em;                           /* size of the bumps. Every cloud measurement below is a
+                                             multiple of this, so one number scales the whole shape.
+                                             "em" = relative to the font size, so clouds grow with size= */
+}
+
+
+/* --------------------------------------------------------------------------
+   2. The message column
+   -------------------------------------------------------------------------- */
+#chat {
+  /* #chat is a vertical flexbox. By default its children stretch to the full
+     width, which would make every cloud as wide as the OBS source. flex-start
+     lets each message be only as wide as its own text. */
+  align-items: flex-start;
+
+  /* Space between messages, so one cloud's shadow doesn't touch the next
+     name. */
+  gap: 10px;
+}
+
+
+/* --------------------------------------------------------------------------
+   3. Name line + message cloud
+   -------------------------------------------------------------------------- */
+
+/* Name line. It sits on the stream background, not on the cloud, so it keeps
+   the overlay's normal black text outline and name colors. Only the left
+   margin is new: it moves the badges and name in a little, to line up with the
+   cloud's rounded left end instead of sticking out past it. (.badges is
+   always there, even when empty, so it's a safe place for the margin.) */
+.badges { margin-left: .5em; }
+
+/* Room for the cloud's shadow, which sticks out 2px to the right. border-box
+   keeps that padding inside the column width. */
+.msg {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-right: 4px;
+}
+
+/* "Name: message" → the colon makes no sense once they're on separate lines. */
+.colon { display: none; }
+
+/* The message itself becomes the cloud. */
+.body {
+  /* A <span> normally flows inline, right after the name. As a block it
+     starts on a new line, under the name. */
+  display: block;
+
+  /* Shrink the cloud to the text, but never wider than the message line.
+     (The 4px of room for the shadow is on .msg, below. It can't go here as
+     calc(100% - 4px): .msg takes its width from this cloud, so the cloud
+     would always end up 4px too narrow and wrap short messages early.) */
+  width: fit-content;
+  max-width: 100%;
+
+  /* Make padding count toward the width above (otherwise max-width + padding
+     would overflow). */
+  box-sizing: border-box;
+
+  /* Needed so the ::before/::after cloud (position: absolute) is placed
+     relative to this message, not to the whole page. */
+  position: relative;
+
+  /* Creates a new stacking context. Without it, z-index: -1 on the cloud
+     would push it behind the page background, where you can't see it. With
+     it, -1 just means "behind this message's text". */
+  isolation: isolate;
+
+  /* A small gap between the name and the top bumps. */
+  margin-top: 2px;
+
+  /* The bumps take up space at the edges, so push the text inward or it would
+     sit on top of the bumps:
+       top    = 1.15 × puff  the big bumps are on top
+       sides  = 1.3 × puff   the round ends, plus a little air (.2em)
+       bottom = 0.9 × puff   smaller bumps at the bottom */
+  padding: calc(var(--puff) * 1.15) calc(var(--puff) * 1.3 + .2em) calc(var(--puff) * .9);
+
+  color: var(--cloud-text);
+
+  /* The overlay puts a black outline (text-shadow) on all chat text so it's
+     readable on any stream. Inside a white cloud it just looks dirty. Turning
+     it off here, instead of with --outline on :root, keeps it on the name
+     line, which still sits on the stream background. */
+  text-shadow: none;
+
+  /* The overlay uses 1.55 for open space between lines. Inside a bubble a
+     slightly tighter value looks better. */
+  line-height: 1.4;
+}
+
+
+/* --------------------------------------------------------------------------
+   4. The cloud shape
+
+   A mask works like a stencil: the element (here a box filled with --cloud) is
+   visible only where the mask image is opaque. A mask can hold several
+   images, separated by commas, and they add up. So the cloud is built from
+   simple shapes laid on top of each other:
+
+        ( )( )( )( )( )         ← layer 1: big bumps along the top
+       (  )(  )(  )(  )(  )      ← layer 2: medium bumps, slightly lower,
+                                   filling the gaps between the big ones
+     (  ███████████████████  )   ← layers 5–6: an oval at each end
+     (  ███████████████████  )   ← layer 7: a plain rectangle, the body
+       ( )( )( )( )( )( )( )     ← layers 3–4: two rows of smaller bumps at the bottom
+
+   Each bump is a "radial-gradient(closest-side, #000 96%, #0000)":
+   a circle that fills its tile, solid (#000) up to 96% of the radius, then
+   transparent (#0000). Only opacity matters in a mask, not the color. The 4%
+   soft edge stops the outline from looking jagged.
+
+   Each layer is written as:
+     <shape>  <position> / <tile width> <tile height>  <repeat-x> <repeat-y>  [box]
+
+     "round no-repeat" repeats the circle sideways (round = squeeze or stretch
+     the tiles slightly so a whole number of them fits, no half bumps at the
+     ends) and only once vertically (just one row).
+
+     Rows with different bump sizes repeat a different number of times, so
+     the bumps don't line up. That's what makes it look lumpy and natural
+     instead of like a postage stamp.
+
+     "content-box" on the bump rows: only repeat inside the element's content
+     area, i.e. inside the horizontal padding set below. That keeps the rows
+     away from the far left and right, so the round ovals form the corners.
+     Without it the corners look square.
+
+   The selector covers .body (normal messages) and .msg.notice (sub/raid
+   notices, which stay one whole cloud; see section 6).
+   -------------------------------------------------------------------------- */
+.body::before,
+.body::after,
+.msg.notice::before,
+.msg.notice::after {
+  /* Short alias so the mask below stays readable. */
+  --p: var(--puff);
+
+  /* The mask goes in a variable because it's needed twice: once with the
+     -webkit- prefix (OBS's built-in browser may be an older Chromium that only
+     understands the prefixed version) and once without. */
+  --puffs:
+    /* 1. top row, big bumps: tile 2.3 × puff, at the very top */
+    radial-gradient(closest-side, #000 96%, #0000) top center / calc(var(--p) * 2.3) calc(var(--p) * 2.3) round no-repeat content-box,
+    /* 2. top row, medium bumps: 0.45 × puff lower, so they fill the dips between the big ones */
+    radial-gradient(closest-side, #000 96%, #0000) center top calc(var(--p) * .45) / calc(var(--p) * 1.7) calc(var(--p) * 1.7) round no-repeat content-box,
+    /* 3. bottom row, medium bumps: at the very bottom */
+    radial-gradient(closest-side, #000 96%, #0000) bottom center / calc(var(--p) * 1.8) calc(var(--p) * 1.8) round no-repeat content-box,
+    /* 4. bottom row, small bumps: a bit higher, to fill those dips */
+    radial-gradient(closest-side, #000 96%, #0000) center bottom calc(var(--p) * .3) / calc(var(--p) * 1.35) calc(var(--p) * 1.35) round no-repeat content-box,
+    /* 5–6. left and right ends: one oval each, almost full height. On a long
+       message they get taller, so the ends stay round. No content-box here:
+       they should reach the outer edge. */
+    radial-gradient(closest-side, #000 98%, #0000) left center / calc(var(--p) * 2.6) calc(100% - var(--p) * .4) no-repeat,
+    radial-gradient(closest-side, #000 98%, #0000) right center / calc(var(--p) * 2.6) calc(100% - var(--p) * .4) no-repeat,
+    /* 7. body: a solid rectangle in the middle. It's smaller than the element,
+       so its edges are hidden under the bumps and ovals. */
+    linear-gradient(#000 0 0) center / calc(100% - var(--p) * 2.4) calc(100% - var(--p) * 2) no-repeat;
+
+  /* Pseudo-elements only appear if they have content, even empty content. */
+  content: "";
+
+  /* Cover the whole element. inset = top/bottom 0, left/right 0.3 × puff, a
+     little narrower than the element so the shadow fits. */
+  position: absolute;
+  inset: 0 calc(var(--p) * .3);
+
+  /* Horizontal padding = the "content box" the bump rows are limited to
+     (see "content-box" above). */
+  padding: 0 calc(var(--p) * .7);
+
+  /* Behind the text. Works because the element has isolation: isolate. */
+  z-index: -1;
+
+  background: var(--cloud);
+  -webkit-mask: var(--puffs);
+  mask: var(--puffs);
+}
+
+/* The shadow: same shape, different color, nudged 2px right and 4px down,
+   and one layer further back so it sits behind the white cloud. A real
+   box-shadow or filter: drop-shadow can't be used here. The mask would cut
+   the shadow off too, because it sits outside the shape. */
+.body::after,
+.msg.notice::after {
+  z-index: -2;
+  background: var(--cloud-shade);
+  transform: translate(2px, 4px);
+}
+
+
+/* --------------------------------------------------------------------------
+   5. Readability
+   -------------------------------------------------------------------------- */
+
+/* /me messages are written in the chatter's name color. The overlay brightens
+   name colors for dark backgrounds, so some (yellow, pink, cyan) are hard to
+   read on a white cloud. A 1px dark edge fixes that without changing the
+   color. */
+.msg.action .body {
+  text-shadow: 0 0 1px rgba(0, 0, 0, .75), 0 1px 1px rgba(0, 0, 0, .3);
+}
+
+
+/* --------------------------------------------------------------------------
+   6. Sub, raid and gift notices
+
+   A notice is "X subscribed for 12 months!" (.sys), sometimes followed by the
+   chatter's own message. Splitting that into name + cloud would leave
+   notices without a message as plain text with no cloud, so instead the
+   whole notice stays one lilac cloud, with the name inline as usual.
+   -------------------------------------------------------------------------- */
+.msg.notice {
+  /* Changing --cloud only on this element is enough: its ::before inherits
+     it, so the same cloud code draws a different color. */
+  --cloud: rgba(232, 222, 255, .97);
+
+  /* Same cloud setup as .body in section 3. The cloud is on the whole notice
+     here, so it needs it too. */
+  width: fit-content;
+  max-width: calc(100% - 4px);
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  padding: calc(var(--puff) * 1.15) calc(var(--puff) * 1.3 + .2em) calc(var(--puff) * .9);
+  color: var(--cloud-text);
+  text-shadow: none;
+  line-height: 1.4;
+
+  /* Remove the overlay's own notice look (purple box with a left border). */
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.msg.notice .sys { color: #6b3fd4; }    /* "X subscribed!" line: darker purple, readable on lilac */
+.msg.notice .badges { margin-left: 0; } /* undo the name-line indent from section 3 */
+.msg.notice .colon { display: inline; } /* bring the colon back: name and message share a line here */
+
+/* Undo the message cloud from section 3. The notice is already one cloud,
+   and a second one inside it would look odd. */
+.msg.notice .body { display: inline; padding: 0; margin: 0; }
+.msg.notice .body::before,
+.msg.notice .body::after { display: none; }
+
+/* The name is on the lilac cloud here, so give light name colors the same
+   dark edge as /me text. :not(.painted) skips 7TV paints. They draw their own
+   outline with filter: drop-shadow, and text-shadow would show through their
+   transparent text fill and ruin the gradient. */
+.msg.notice .name:not(.painted) {
+  text-shadow: 0 0 1px rgba(0, 0, 0, .75), 0 1px 1px rgba(0, 0, 0, .3);
+}
+
+/* The "Connected to #channel" line has no .body, so it gets no cloud and
+   needs nothing here. */
+
+
+/* --------------------------------------------------------------------------
+   7. Optional layout: name ON the cloud
+
+   Puts the badges and name in a small cloud-colored pill that overlaps the
+   cloud's top edge, like a label:
+
+        [badge] (Username)
+        .-~-~-~-~-~-~-~-~-.
+       (  the message text  )
+
+   How to turn it on: change "@media not all" below to "@media all".
+     "@media not all" means "no screen at all", so everything inside is
+     ignored. "@media all" means "every screen", so it applies. It works as an
+     on/off switch, and comments still work inside it.
+   -------------------------------------------------------------------------- */
+@media not all {
+  /* Why not just give .name a background? 7TV paints ARE the name's
+     background (a gradient clipped to the letters), so a pill background
+     would replace the paint. Instead the pill is a separate shape, .msg::before,
+     placed behind the badges and name.
+
+     To put it exactly behind them, the message becomes a grid:
+
+         column:   1         2          3
+         row 1:  [badges]  [name]    (empty)    ← pill covers columns 1–2
+         row 2:  [ cloud with the message      ]
+
+     Pseudo-elements become grid items too, so ::before can be told
+     "row 1, columns 1 to 2" and it gets exactly the width of badges + name.
+
+     Notices (their ::before is their cloud, and they keep the inline name)
+     and the status line (no name) are left out with :not(). */
+  .msg:not(.notice):not(.status) {
+    display: grid;
+    grid-template-columns: auto auto 1fr;  /* badges, name, the rest */
+    justify-items: start;                  /* items keep their own width instead of stretching */
+    isolation: isolate;                    /* keep the z-index values below inside this message */
+  }
+
+  .msg:not(.notice):not(.status)::before {
+    content: "";
+    grid-area: 1 / 1 / 2 / 3;   /* row 1, columns 1 up to (not including) 3 */
+    justify-self: stretch;      /* fill those columns, unlike the other items */
+    margin-left: .5em;          /* same indent as the badges (section 3) */
+    border-radius: 1em;         /* fully rounded ends */
+    background: var(--cloud);
+    z-index: 1;                 /* above the message cloud, below the name */
+  }
+
+  .msg:not(.notice) .badges {
+    grid-area: 1 / 1;
+    padding-left: .45em;        /* space between the pill's left end and the first badge */
+    z-index: 2;
+  }
+  .msg:not(.notice) .name {
+    grid-area: 1 / 2;
+    padding-right: .45em;       /* space between the name and the pill's right end */
+    z-index: 2;                 /* grid items can use z-index without position: relative */
+
+    /* The pill is light, so swap the black outline for the thin dark edge
+       used on /me text. */
+    text-shadow: 0 0 1px rgba(0, 0, 0, .75), 0 1px 1px rgba(0, 0, 0, .3);
+  }
+  .msg:not(.notice) .name.painted { text-shadow: none; }   /* paints bring their own outline (see section 6) */
+
+  .msg:not(.notice) .body {
+    grid-area: 2 / 1 / 3 / 4;   /* row 2, all three columns */
+
+    /* Pull the cloud up under the pill so the pill sits on its top bumps.
+       The cloud's top padding (1.15 × puff, about .9em) is more than this, so
+       the pill never covers the message text. */
+    margin-top: -.55em;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   Ideas to try
+     - Dark clouds:      --cloud: rgba(30, 34, 48, .9); --cloud-text: #eee;
+                         and remove the text-shadow in section 5.
+     - Flatter clouds:   --puff: .5em;
+     - No shadow:        .body::after { display: none; }
+     - Smaller names:    .name { font-size: .85em; }
+     - Per-user color:   .msg[data-user="12345678"] { --cloud: #ffe9a8; }
+                         (numeric Twitch user ID, same trick as notices)
+   -------------------------------------------------------------------------- */

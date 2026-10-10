@@ -1,0 +1,28 @@
+/* ==========================================================================
+   Basic example: a dark box behind each message
+   ==========================================================================
+
+   Makes chat readable on busy or bright gameplay. Each chat message is one
+   <div class="msg">, so styling .msg styles every message.
+   ========================================================================== */
+
+.msg {
+  background: rgba(0, 0, 0, .55); /* black at 55% opacity. Last number: 0 = invisible, 1 = solid */
+  padding: 4px 10px;              /* space inside the box: 4px top/bottom, 10px left/right */
+  border-radius: 8px;             /* rounded corners. Bigger number = rounder */
+}
+
+/* By default every box is as wide as the whole OBS source. This makes each
+   box only as wide as its text instead. #chat is the column that holds all
+   messages; it's a flexbox, and align-items says how its children line up
+   across. flex-start = left, and don't stretch. */
+#chat {
+  align-items: flex-start;
+  gap: 5px;                       /* space between boxes */
+}
+
+/* The text keeps its black outline. On a dark box you can turn it off for a
+   cleaner look. --outline is not set by the URL options, so no !important. */
+:root {
+  --outline: none;
+}

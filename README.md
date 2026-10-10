@@ -166,7 +166,7 @@ There are two ways to change the look:
 
 ### Rules for OBS Custom CSS
 
-- **Font size, emote size, GIF height and the outline need `!important`.** The overlay sets these from the URL options, which win over your CSS otherwise.
+- **Font size, emote size, GIF height and the font need `!important`.** The overlay sets these from the URL options, which win over your CSS otherwise.
 - **Name colors and 7TV paints also need `!important`.** The overlay applies them directly to each name.
 
 ### Selectors
@@ -240,6 +240,16 @@ These are set on `:root`:
 /* hide one person (numeric Twitch user ID; hideBots= is easier with usernames) */
 .msg[data-user="12345678"] { display: none; }
 ```
+
+### Example themes
+
+The [`custom_css_examples`](custom_css_examples/) folder has ready-made styles to paste into the Custom CSS box. Every line is commented, explaining what it does and why, and they're numbered from simplest to most advanced, so they also work as a CSS tutorial:
+
+- **Basic:** bigger text, a different font, boxes behind messages, name on its own line, newest message on top, hiding things.
+- **Medium:** dark panel with striped rows, speech bubbles, neon glow, retro terminal.
+- **Advanced:** fluffy clouds, with the name above the cloud or in a pill on top of it.
+
+See [its README](custom_css_examples/README.md) for the full list and how to combine them.
 
 **Tip:** to try changes quickly, open `chat.html?channel=...` in Chrome and edit styles live in DevTools (F12). When it looks right, paste the CSS into OBS.
 

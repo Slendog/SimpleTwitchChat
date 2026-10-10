@@ -1,0 +1,27 @@
+/* ==========================================================================
+   Basic example: a different font
+   ==========================================================================
+
+   Loads a font from Google Fonts and uses it for the whole chat.
+
+   IMPORTANT: @import only works at the very top of a stylesheet. In OBS, put
+   this ABOVE the default CSS that's already in the Custom CSS box (or delete
+   that default, it isn't needed). If anything comes before @import, the
+   browser silently skips it and you get the normal font.
+
+   To pick another font: find it on fonts.google.com, click "Get font" →
+   "Get embed code", choose "@import", and copy the url(...) part. Then put
+   its name in --font below.
+   ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap");
+
+:root {
+  /* The first font that's available is used, so list fallbacks after it in
+     case the download fails. !important because the overlay sets --font from
+     the font= URL option (see 01-bigger-text.css). */
+  --font: "Nunito", "Segoe UI", Arial, sans-serif !important;
+}
+
+/* A font installed on your computer works too, without @import:
+   :root { --font: "Comic Sans MS", sans-serif !important; } */

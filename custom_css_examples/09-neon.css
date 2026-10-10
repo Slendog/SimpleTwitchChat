@@ -1,0 +1,50 @@
+/* ==========================================================================
+   Medium example: neon glow
+   ==========================================================================
+
+   Names glow in their own color, the text has a soft blue glow, and emotes
+   get a faint halo.
+
+   New ideas here:
+     - text-shadow with several shadows (separated by commas) to build a glow
+     - currentColor: "whatever this element's text color is". Each name has
+       its own color, so one rule gives every name a glow in its own color.
+     - filter: drop-shadow, a shadow that follows an image's shape
+   ========================================================================== */
+
+:root {
+  /* The overlay puts --outline as text-shadow on all chat text. Instead of a
+     black outline: a thin dark edge (readable on bright scenes) plus a wide
+     blue glow. Shadows are "x-offset y-offset blur color". */
+  --outline: 0 0 2px #000, 0 0 10px rgba(0, 170, 255, .75);
+}
+
+.msg {
+  color: #e6f6ff;        /* slightly blue-white text fits the glow */
+}
+
+/* A glow is just stacked shadows with no offset and growing blur. The small
+   one keeps the letters sharp, the big ones spread the light. */
+.name:not(.painted) {
+  text-shadow:
+    0 0 2px #000,
+    0 0 6px currentColor,
+    0 0 14px currentColor,
+    0 0 24px currentColor;
+}
+/* :not(.painted) above skips 7TV paints. They show their gradient through
+   see-through letters, and a text-shadow would shine through and cover it.
+   Paints already have their own effects anyway. */
+
+/* Emote images. drop-shadow follows the visible pixels, so the glow hugs the
+   emote's shape instead of its square box (box-shadow would). */
+.stack > img {
+  filter: drop-shadow(0 0 4px rgba(0, 170, 255, .6));
+}
+
+/* Notice box: a neon purple border instead of the flat box. */
+.msg.notice {
+  background: rgba(20, 0, 40, .5);
+  border-left-color: #c77dff;
+  box-shadow: 0 0 10px rgba(199, 125, 255, .5);
+}

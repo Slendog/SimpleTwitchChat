@@ -1,0 +1,30 @@
+/* ==========================================================================
+   Basic example: name on its own line, message below
+   ==========================================================================
+
+   Each message is built from these parts, in this order:
+
+     <div class="msg">
+       <span class="badges">…</span>   badge images
+       <span class="name">…</span>     username
+       <span class="colon">:</span>    the ":" after the name
+       <span class="body">…</span>     the message text and emotes
+     </div>
+
+   A <span> sits inline, in the same line as whatever is before it. Changing
+   the message part to a block makes it start on a new line.
+   ========================================================================== */
+
+.colon {
+  display: none;          /* "name: message" → the colon looks odd on two lines, hide it */
+}
+
+.body {
+  display: block;         /* block = start on a new line and take the full width */
+  padding-left: .6em;     /* indent the message a little under the name */
+}
+
+.name {
+  font-size: .85em;       /* slightly smaller name, so the message stands out.
+                             em = relative to the normal text size */
+}

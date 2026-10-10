@@ -1,0 +1,48 @@
+/* ==========================================================================
+   Medium example: dark chat panel with striped rows
+   ==========================================================================
+
+   A solid dark panel like the chat on a website, instead of text floating
+   over the game. Every other message gets a slightly lighter row, which makes
+   long chats easier to follow.
+
+   New ideas here:
+     - giving the whole page a background
+     - :nth-child() to style every other message
+     - font-weight to make text lighter or bolder
+   ========================================================================== */
+
+/* The overlay's page is see-through, so OBS shows the scene behind it.
+   A background on body fills the whole browser source. */
+body {
+  background: rgba(24, 24, 27, .92);   /* almost-solid dark gray */
+}
+
+:root {
+  --outline: none;      /* no black text outline needed on a dark panel */
+}
+
+.msg {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;     /* the overlay uses bold (700) text for readability
+                           over gameplay. On a panel, regular-ish text is calmer.
+                           100 = thin … 400 = normal … 700 = bold … 900 = black */
+  line-height: 1.45;
+}
+
+/* nth-child(odd) = the 1st, 3rd, 5th… child of #chat. Old messages are
+   removed from the top, so the stripes swap as chat moves. That's fine; the
+   point is that neighbors differ. Use (even) for the other half. */
+.msg:nth-child(odd) {
+  background: rgba(255, 255, 255, .05);
+}
+
+.name {
+  font-weight: 700;     /* keep names bold so they stand out from the text */
+}
+
+/* Notices already have their own purple box. Make it fit the panel. */
+.msg.notice {
+  background: rgba(145, 71, 255, .22);
+}

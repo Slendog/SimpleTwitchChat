@@ -1,0 +1,40 @@
+/* ==========================================================================
+   Basic example: hiding things
+   ==========================================================================
+
+   "display: none" removes an element completely. Pick the lines you want
+   and delete the rest.
+   ========================================================================== */
+
+/* Badges (sub, mod, VIP, 7TV badges, …). Same as the badges=0 URL option. */
+.badges { display: none; }
+
+/* The loading bar at the top. !important because the overlay shows and
+   hides it from its script. Same as the loader=0 URL option. */
+#loader { display: none !important; }
+
+/* Sub, raid and gift notices. Same as notices=0. */
+.msg.notice { display: none; }
+
+/* The "Connected to #channel" line. */
+.msg.status { display: none; }
+
+/* Twitch chat GIFs. Same as gifs=0. */
+.gif { display: none; }
+
+/* /me messages. */
+.msg.action { display: none; }
+
+/* One specific person. data-user is their numeric Twitch user ID. To find it,
+   open https://api.ivr.fi/v2/twitch/user?login=USERNAME in a browser and look
+   for "id". For bots, the hideBots= URL option is easier (it takes usernames). */
+.msg[data-user="12345678"] { display: none; }
+
+/* 7TV paints (colorful gradient names): turn them off and keep the normal
+   Twitch name color. The overlay applies paints straight onto each name as
+   inline styles, so every line needs !important to win. */
+.name.painted {
+  background: none !important;                  /* the paint gradient itself */
+  -webkit-text-fill-color: currentColor !important; /* paints make the letters see-through to show the gradient; undo that */
+  filter: none !important;                      /* the paint's glow/shadow */
+}

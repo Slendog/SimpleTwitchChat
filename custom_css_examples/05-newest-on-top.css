@@ -1,0 +1,24 @@
+/* ==========================================================================
+   Basic example: newest message at the top, aligned right
+   ==========================================================================
+
+   By default chat is pinned to the bottom of the OBS source and new messages
+   appear at the bottom. This flips it: chat is pinned to the top, the newest
+   message is first, and older ones move down and off the screen.
+
+   #chat is the column that holds all messages.
+   ========================================================================== */
+
+#chat {
+  top: 0;                           /* pin the column to the top... */
+  bottom: auto;                     /* ...and stop pinning it to the bottom */
+
+  /* #chat is a flexbox column. New messages are always added at the end;
+     column-reverse shows the end first, so the newest one is on top. */
+  flex-direction: column-reverse;
+
+  /* Optional: right-align, e.g. for chat on the right side of the screen.
+     Remove these two lines to keep it on the left. */
+  align-items: flex-end;            /* each line hugs the right edge */
+  text-align: right;                /* wrapped lines also line up on the right */
+}

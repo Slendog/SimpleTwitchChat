@@ -1,0 +1,71 @@
+/* ==========================================================================
+   Medium example: retro terminal
+   ==========================================================================
+
+   Green text on black in a typewriter font, with a "> " prompt in front of
+   every message. All names are forced to one color.
+
+   New ideas here:
+     - ::before with text content, to add characters that aren't in the page
+     - overriding the overlay's per-name colors (inline styles → !important)
+     - a font list that works on Windows, macOS and Linux
+   ========================================================================== */
+
+:root {
+  /* Monospace = every letter is the same width, like an old terminal. The
+     list is tried in order: Windows has Consolas, macOS has Menlo, Linux
+     usually has DejaVu Sans Mono, and "monospace" is the last resort.
+     !important because the overlay sets --font from the font= URL option. */
+  --font: "Cascadia Mono", Consolas, Menlo, "DejaVu Sans Mono", monospace !important;
+
+  /* Instead of a black outline: a faint green glow, like an old screen. */
+  --outline: 0 0 4px rgba(51, 255, 102, .45);
+}
+
+/* Black panel behind the whole chat. */
+body {
+  background: rgba(0, 8, 0, .88);
+}
+
+.msg {
+  color: #33ff66;
+  font-weight: 400;      /* terminal text isn't bold */
+}
+
+/* The prompt. ::before adds a piece of text before the message's content,
+   without changing the page itself. */
+.msg::before {
+  content: "> ";
+  opacity: .6;           /* dimmer than the message, so it reads as decoration */
+}
+
+/* The overlay colors every name (and /me text) with an inline style, which
+   beats normal CSS. !important wins over inline styles. */
+.name,
+.msg.action .body {
+  color: #b4ffc8 !important;
+}
+
+/* 7TV paints would still draw their gradient on top. Turn them off. */
+.name.painted {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  filter: none !important;
+}
+
+/* Colorful badges don't fit the look. */
+.badges { display: none; }
+
+/* Notices: green line on the left instead of the purple box. */
+.msg.notice {
+  background: none;
+  border-left-color: #33ff66;
+  border-radius: 0;
+}
+.msg.notice .sys { color: #33ff66; }
+.msg.notice::before { content: none; }   /* its text starts on its own line, so the prompt would sit alone */
+
+/* Status line ("Connected to #channel") looks like a system message: no
+   prompt, dimmer. */
+.msg.status { color: #1f9e40; }
+.msg.status::before { content: "$ "; }

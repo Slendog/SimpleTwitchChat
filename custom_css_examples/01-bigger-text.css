@@ -1,0 +1,24 @@
+/* ==========================================================================
+   Basic example: bigger text and emotes
+   ==========================================================================
+
+   The simplest change you can make. The overlay keeps its sizes in CSS
+   variables (names starting with --) on :root, the top of the page. Change
+   the variable and everything that uses it follows.
+
+   Why !important?
+     The overlay writes these variables straight onto the page from the URL
+     options (size=, emoteScale=), as inline styles. Inline styles beat normal
+     CSS, so without !important your value would be ignored. Only these four
+     variables need it: --size, --emote, --gif, --font.
+
+   (You can also just use the URL options instead, e.g. ?size=28. CSS is handy
+   when you use "Local file" mode, or want everything in one place.)
+   ========================================================================== */
+
+:root {
+  --size: 28px !important;   /* text size (default 20px) */
+  --emote: 2em !important;   /* emote height. "em" = relative to the text size,
+                                so 2em = twice as tall as the text (default 1.6em) */
+  --gif: 200px !important;   /* height of Twitch chat GIFs (default 150px) */
+}
