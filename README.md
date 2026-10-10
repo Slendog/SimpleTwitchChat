@@ -249,7 +249,7 @@ The [`custom_css_examples`](custom_css_examples/) folder has ready-made styles t
 - **Medium:** dark panel with striped rows, speech bubbles, neon glow, retro terminal.
 - **Advanced:** fluffy clouds, with the name above the cloud or in a pill on top of it.
 
-See [its README](custom_css_examples/README.md) for the full list and how to combine them.
+See the [examples README](custom_css_examples/README.md) for screenshots of every example, what each one teaches, and how to combine them.
 
 **Tip:** to try changes quickly, open `chat.html?channel=...` in Chrome and edit styles live in DevTools (F12). When it looks right, paste the CSS into OBS.
 

@@ -170,6 +170,13 @@
      the tiles slightly so a whole number of them fits, no half bumps at the
      ends) and only once vertically (just one row).
 
+     The rows are positioned "left", not "center". With center, the browser
+     puts one bump exactly in the middle and lays out the rest from there.
+     When a whole number of bumps fits but that number is even, this shifts
+     the row by half a bump, so the first and last bumps get sliced in half
+     and the cloud looks cut off at its ends. Starting at the left edge, the
+     whole bumps always fill the row exactly.
+
      Rows with different bump sizes repeat a different number of times, so
      the bumps don't line up. That's what makes it look lumpy and natural
      instead of like a postage stamp.
@@ -194,13 +201,13 @@
      understands the prefixed version) and once without. */
   --puffs:
     /* 1. top row, big bumps: tile 2.3 × puff, at the very top */
-    radial-gradient(closest-side, #000 96%, #0000) top center / calc(var(--p) * 2.3) calc(var(--p) * 2.3) round no-repeat content-box,
+    radial-gradient(closest-side, #000 96%, #0000) left top / calc(var(--p) * 2.3) calc(var(--p) * 2.3) round no-repeat content-box,
     /* 2. top row, medium bumps: 0.45 × puff lower, so they fill the dips between the big ones */
-    radial-gradient(closest-side, #000 96%, #0000) center top calc(var(--p) * .45) / calc(var(--p) * 1.7) calc(var(--p) * 1.7) round no-repeat content-box,
+    radial-gradient(closest-side, #000 96%, #0000) left top calc(var(--p) * .45) / calc(var(--p) * 1.7) calc(var(--p) * 1.7) round no-repeat content-box,
     /* 3. bottom row, medium bumps: at the very bottom */
-    radial-gradient(closest-side, #000 96%, #0000) bottom center / calc(var(--p) * 1.8) calc(var(--p) * 1.8) round no-repeat content-box,
+    radial-gradient(closest-side, #000 96%, #0000) left bottom / calc(var(--p) * 1.8) calc(var(--p) * 1.8) round no-repeat content-box,
     /* 4. bottom row, small bumps: a bit higher, to fill those dips */
-    radial-gradient(closest-side, #000 96%, #0000) center bottom calc(var(--p) * .3) / calc(var(--p) * 1.35) calc(var(--p) * 1.35) round no-repeat content-box,
+    radial-gradient(closest-side, #000 96%, #0000) left bottom calc(var(--p) * .3) / calc(var(--p) * 1.35) calc(var(--p) * 1.35) round no-repeat content-box,
     /* 5–6. left and right ends: one oval each, almost full height. On a long
        message they get taller, so the ends stay round. No content-box here:
        they should reach the outer edge. */

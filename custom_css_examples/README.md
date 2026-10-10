@@ -14,33 +14,105 @@ You can combine several examples by pasting them one after another, e.g. `01-big
 
 ## The examples
 
-They're numbered from simplest to most advanced. If you're new to CSS, start at the top: each one adds only a couple of new ideas.
+They're numbered from simplest to most advanced. If you're new to CSS, start at the top: each one adds only a couple of new ideas. Click a file name to open it.
+
+The screenshots show the same made-up chat in each style: the "Connected" line, a few messages, a `/me` message, a sub notice and a name with a 7TV paint.
 
 ### Basic: a few lines each
 
-| File | What it does | What you learn |
-|---|---|---|
-| `01-bigger-text.css` | Bigger text, emotes and GIFs | CSS variables, why some need `!important` |
-| `02-different-font.css` | Uses a Google font | `@import`, font fallbacks |
-| `03-message-boxes.css` | Dark rounded box behind each message | `background`, `padding`, `border-radius`, opacity |
-| `04-name-on-own-line.css` | Name on one line, message below | How a message is built, `display: block` vs inline |
-| `05-newest-on-top.css` | Newest message at the top, right-aligned | Moving the chat column, `flex-direction` |
-| `06-hide-things.css` | Hide badges, notices, GIFs, the loading bar, one user, 7TV paints… | `display: none`, picking elements with selectors |
+#### [`01-bigger-text.css`](01-bigger-text.css): Bigger text
+
+Bigger text, emotes and GIFs.
+
+**You learn:** CSS variables, and why some of them need `!important`.
+
+<img src="01-bigger-text.png" alt="Bigger text example" width="330">
+
+#### [`02-different-font.css`](02-different-font.css): Different font
+
+Loads a font from Google Fonts (Nunito) and uses it for the whole chat.
+
+**You learn:** `@import`, font fallback lists.
+
+<img src="02-different-font.png" alt="Different font example" width="330">
+
+#### [`03-message-boxes.css`](03-message-boxes.css): Message boxes
+
+A dark rounded box behind each message, as wide as its text.
+
+**You learn:** `background`, `padding`, `border-radius`, transparency.
+
+<img src="03-message-boxes.png" alt="Message boxes example" width="330">
+
+#### [`04-name-on-own-line.css`](04-name-on-own-line.css): Name on its own line
+
+The name on one line, the message indented below it.
+
+**You learn:** How a message is built from parts, `display: block` vs inline.
+
+<img src="04-name-on-own-line.png" alt="Name on its own line example" width="330">
+
+#### [`05-newest-on-top.css`](05-newest-on-top.css): Newest on top
+
+Chat pinned to the top with the newest message first, aligned right.
+
+**You learn:** Moving the chat column, `flex-direction`, `text-align`.
+
+<img src="05-newest-on-top.png" alt="Newest on top example" width="330">
+
+#### [`06-hide-things.css`](06-hide-things.css): Hiding things
+
+A list of things you can hide: badges, the loading bar, notices, the status line, GIFs, `/me` messages, one user, 7TV paints. Pick the lines you want. The screenshot uses all of them.
+
+**You learn:** `display: none`, choosing elements with selectors.
+
+<img src="06-hide-things.png" alt="Hiding things example" width="330">
 
 ### Medium: a complete look
 
-| File | What it does | What you learn |
-|---|---|---|
-| `07-dark-panel.css` | Solid dark chat panel with striped rows | Page background, `:nth-child()`, `font-weight` |
-| `08-speech-bubbles.css` | White comic-style bubbles with a tail | `::after`, the CSS triangle trick, `position` |
-| `09-neon.css` | Names glow in their own color | Stacked `text-shadow`, `currentColor`, `drop-shadow` |
-| `10-terminal.css` | Green monospace "hacker terminal" with a `>` prompt | `::before` with text, overriding name colors |
+#### [`07-dark-panel.css`](07-dark-panel.css): Dark panel
+
+A solid dark chat panel instead of text floating over the game, with every other row slightly lighter.
+
+**You learn:** Page background, `:nth-child()`, `font-weight`.
+
+<img src="07-dark-panel.png" alt="Dark panel example" width="330">
+
+#### [`08-speech-bubbles.css`](08-speech-bubbles.css): Speech bubbles
+
+White comic-style bubbles with a little tail.
+
+**You learn:** `::after`, the CSS triangle trick, `position: relative/absolute`.
+
+<img src="08-speech-bubbles.png" alt="Speech bubbles example" width="330">
+
+#### [`09-neon.css`](09-neon.css): Neon
+
+Names glow in their own color, text has a soft blue glow.
+
+**You learn:** Stacked `text-shadow`, `currentColor`, `filter: drop-shadow`.
+
+<img src="09-neon.png" alt="Neon example" width="330">
+
+#### [`10-terminal.css`](10-terminal.css): Terminal
+
+Green monospace "hacker terminal" with a `>` prompt and one color for every name.
+
+**You learn:** `::before` with text, overriding name colors, cross-platform font lists.
+
+<img src="10-terminal.png" alt="Terminal example" width="330">
 
 ### Advanced
 
-| File | What it does | What you learn |
-|---|---|---|
-| `11-clouds.css` | Name above, message in a fluffy white cloud. A second layout puts the name in a pill on the cloud (change `@media not all` to `@media all` in section 7) | CSS masks built from gradients, stacking contexts, grid, `content-box` |
+#### [`11-clouds.css`](11-clouds.css): Clouds
+
+The name sits above, and the message goes in a fluffy white cloud with a soft shadow. Sub notices get a lilac cloud.
+
+The file has a second layout, with the name in a small pill on the cloud's top edge (right screenshot). To switch to it, change `@media not all` to `@media all` in section 7.
+
+**You learn:** CSS masks built from gradients, `::before`/`::after` as background shapes, stacking contexts (`isolation`), grid, `content-box`.
+
+<img src="11-clouds.png" alt="Clouds example, name above the cloud" width="330"> <img src="11-clouds-name-on-cloud.png" alt="Clouds example, name on the cloud" width="330">
 
 ## Writing your own
 
