@@ -213,18 +213,18 @@
           <li>In OBS, add a source: <b>+</b> → <b>Browser</b>.</li>
           <li>Make sure <b>Local file</b> is <b>unticked</b>, and paste the URL into <b>URL</b>.</li>
           <li>Set width and height, e.g. <code>450</code> × <code>900</code>. The background is transparent.</li>
-          <li>If you picked a look below, paste its CSS into <b>Custom CSS</b>.</li>
+          <li>Replace everything in <b>Custom CSS</b> with the CSS from <b>Look</b> below: the recommended CSS, or your theme's CSS.</li>
           <li>Click <b>OK</b>. To change options later, edit the URL in the source's properties.</li>
         </ol>
       </section>
 
       <section class="panel">
-        <h2><span class="step">4</span>Look (optional)</h2>
+        <h2><span class="step">4</span>Look and Custom CSS</h2>
         <label class="field">Example theme
           <select id="theme"></select>
           <small>These go into OBS's <b>Custom CSS</b> box, not the URL. The preview shows them right away. <a href="https://github.com/Slendog/SimpleTwitchChat/tree/main/custom_css_examples">See all examples with screenshots</a>.</small>
         </label>
-        <div id="theme-out" hidden>
+        <div id="theme-out">
           <p class="hint" id="theme-note" style="margin:10px 0 0"></p>
           <pre class="css" id="theme-css"></pre>
           <div class="row">
@@ -269,7 +269,7 @@ const DEFAULTS = {
 const ORDER = ['size', 'emoteScale', 'max', 'fade', 'font', 'badges', 'paints', 'notices', 'gifs', 'gifHeight', 'hideCommands', 'loader', 'prefetch', 'hideBots'];
 
 const THEMES = [
-  ['', 'None (default look)'],
+  ['', 'None (default look, recommended CSS)'],
   ['01-bigger-text', 'Bigger text'],
   ['02-different-font', 'Different font (Nunito)'],
   ['03-message-boxes', 'Message boxes'],
@@ -279,13 +279,16 @@ const THEMES = [
   ['08-speech-bubbles', 'Speech bubbles'],
   ['09-neon', 'Neon'],
   ['10-terminal', 'Terminal'],
-  ['11-clouds', 'Clouds'],
-  ['11-clouds:pill', 'Clouds, name on the cloud'],
+  ['11-custom-badges', 'Custom mod / VIP / streamer badges'],
+  ['12-clouds', 'Clouds'],
+  ['12-clouds:pill', 'Clouds, name on the cloud'],
 ];
 const THEME_NOTES = {
   '01-bigger-text': 'Overrides the size options above.',
-  '02-different-font': 'The @import line must be the first thing in the Custom CSS box, above OBS’s default CSS (or delete that default).',
-  '11-clouds:pill': 'Same file as Clouds with the optional layout in section 7 switched on.',
+  '': 'No theme: use this as the Custom CSS. It replaces OBS’s default CSS.',
+  '02-different-font': 'The @import line must be the first thing in the Custom CSS box.',
+  '11-custom-badges': 'Only shows when a mod, VIP or the streamer chats. Swap in your own image addresses; the end of the CSS explains using files from your PC.',
+  '12-clouds:pill': 'Same file as Clouds with the optional layout in section 7 switched on.',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -355,8 +358,15 @@ function update() {
 
 // ---- themes
 const cssCache = {};
+// Recommended Custom CSS when no theme is used.
+const BASE_CSS = `body {
+  background-color: rgba(0, 0, 0, 0);
+  margin: 0px auto;
+}
+`;
+
 async function themeCss(value) {
-  if (!value) return '';
+  if (!value) return BASE_CSS;
   const [file, variant] = value.split(':');
   if (!(file in cssCache)) {
     const r = await fetch(`custom_css_examples/${file}.css`);
@@ -381,7 +391,6 @@ function injectCss() {
 
 async function applyTheme() {
   const value = $('theme').value;
-  $('theme-out').hidden = !value;
   try {
     currentCss = await themeCss(value);
     $('theme-css').textContent = currentCss;

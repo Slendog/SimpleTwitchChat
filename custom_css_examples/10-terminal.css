@@ -3,7 +3,7 @@
    ==========================================================================
 
    Green text on black in a typewriter font, with a "> " prompt in front of
-   every message. All names are forced to one color.
+   every message. Names are all one color, except 7TV paints, which stay.
 
    New ideas here:
      - ::before with text content, to add characters that aren't in the page
@@ -46,12 +46,21 @@ body {
   color: #b4ffc8 !important;
 }
 
-/* 7TV paints would still draw their gradient on top. Turn them off. */
-.name.painted {
-  background: none !important;
-  -webkit-text-fill-color: currentColor !important;
-  filter: none !important;
-}
+/* 7TV paints (gradient names) are left alone: a painted name has the class
+   .painted, and draws its gradient on top of the text color, so the green
+   above doesn't affect it. Names without a paint, or every name when paints
+   are turned off (paints=0), stay green.
+
+   To make every name green, paints included, add the rule below. It removes
+   the paint gradient, makes the letters visible again (paints make them
+   see-through to show the gradient), and removes the paint's glow:
+
+   .name.painted {
+     background: none !important;
+     -webkit-text-fill-color: currentColor !important;
+     filter: none !important;
+   }
+*/
 
 /* Colorful badges don't fit the look. */
 .badges { display: none; }

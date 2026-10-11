@@ -1,0 +1,159 @@
+/* ==========================================================================
+   Medium example: custom badges, with images from the web or your PC
+   ==========================================================================
+
+   Swaps Twitch's moderator, VIP and broadcaster badges for your own images,
+   hides a few badges, and gives one specific person an extra badge. The end
+   of the file explains where the images can come from: the web, files on
+   your own computer, or text inside the CSS itself.
+
+   The active rules use the sample images in custom_css_examples/images/,
+   loaded from this project's website, so the example works as is, with the
+   hosted version or your own copy.
+
+   New ideas here:
+     - attribute selectors: [alt^="moderator/"] = "alt starts with moderator/"
+     - content: url(...) to swap the picture shown by an <img>
+     - an extra badge drawn with ::after and background-image
+     - web addresses, relative and absolute file paths, and data: URLs
+
+   How badges are built:
+     Each badge is an <img> inside <span class="badges">. Its alt text is the
+     badge's Twitch name and version, for example:
+
+       moderator/1     vip/1         broadcaster/1    partner/1
+       subscriber/12   founder/0     sub-gifter/50    bits/1000
+       premium/1  (Prime)            turbo/1
+
+     subscriber/ and bits/ end with the months / amount, so select those with
+     ^= ("starts with") to match all of them, or = for one exact version.
+     7TV badges use their 7TV name as alt text, e.g. "7TV Subscriber".
+
+   Image formats: PNG, JPG, GIF (animated too), WebP and SVG all work.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Replace badges
+   content: url(...) on an <img> shows that picture instead of the original.
+   It's resized to the normal badge height automatically.
+   -------------------------------------------------------------------------- */
+.badges img[alt^="moderator/"] {
+  content: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/mod.svg");
+}
+.badges img[alt^="vip/"] {
+  content: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/vip.svg");
+}
+.badges img[alt^="broadcaster/"] {
+  content: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/broadcaster.svg");
+}
+
+/* A badge for subscribers who reached 12 months, leaving the others alone:
+.badges img[alt="subscriber/12"] { content: url("https://example.com/my-12-month-badge.png"); }
+*/
+
+
+/* --------------------------------------------------------------------------
+   2. Hide some badges, keep the rest
+   -------------------------------------------------------------------------- */
+.badges img[alt^="premium/"],     /* Prime Gaming */
+.badges img[alt^="turbo/"] {      /* Turbo */
+  display: none;
+}
+
+
+/* --------------------------------------------------------------------------
+   3. An extra badge for one person
+   .msg[data-user="…"] matches messages from one Twitch user ID. To find an
+   ID, open https://api.ivr.fi/v2/twitch/user?login=USERNAME and look for
+   "id". Replace 12345678 below with it.
+
+   ::after adds an empty box at the end of the badges. Giving it a size and a
+   background image turns it into a badge. "contain" fits the whole image
+   into the box without stretching it.
+   -------------------------------------------------------------------------- */
+.msg[data-user="12345678"] .badges::after {
+  content: "";
+  display: inline-block;
+  width: 1.05em;              /* same size as the other badges */
+  height: 1.05em;
+  margin-right: 4px;
+  vertical-align: middle;
+  position: relative;
+  top: -.08em;                /* the overlay nudges badges up a little; match it */
+  background: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/star.svg") center / contain no-repeat;
+}
+
+
+/* --------------------------------------------------------------------------
+   4. Badge size
+   em = relative to the text size. The overlay uses 1.05em.
+   -------------------------------------------------------------------------- */
+/* .badges img { height: 1.3em; } */
+
+
+/* ==========================================================================
+   Where the images can come from
+   ==========================================================================
+
+   Every url("…") above can point to any of these three. Pick the one that
+   fits how you load the overlay in OBS.
+
+   --------------------------------------------------------------------------
+   5. An image on the web  (works everywhere)
+   --------------------------------------------------------------------------
+   What the rules above use. Upload your image somewhere public and paste its
+   address, starting with https://. Right-click an image in your browser →
+   "Copy image address" gives you one.
+
+   --------------------------------------------------------------------------
+   6. A file on your computer  (only with your own copy of chat.html)
+   --------------------------------------------------------------------------
+   Easiest: a path RELATIVE to chat.html. It works with "Local file" ticked
+   or unticked, on Windows, macOS and Linux, and keeps working if you move
+   the whole folder:
+
+     url("my-images/mod.png")      → a my-images folder next to chat.html
+     url("../Pictures/mod.png")    → .. = one folder up from chat.html
+
+   A full path works too, but how to write it depends on the OBS setup:
+     "Local file" unticked:  url("file:///C:/Users/YourName/Pictures/mod.png")
+     "Local file" ticked:    url("http://absolute/C:/Users/YourName/Pictures/mod.png")
+     (Linux/macOS: file:///home/yourname/Pictures/mod.png, and
+      http://absolute/home/yourname/Pictures/mod.png)
+   Same rules as the URL in the README: forward slashes, spaces as %20.
+
+   Why not with the hosted version (https://slendog.github.io/…)? A web page
+   isn't allowed to read files from your computer. Browsers block that on
+   purpose, so no website you visit can read your files. Use 5 or 7 instead.
+
+   Example, using the sample images that come with the download (remove the
+   /* and *\/ lines around it, and change the paths to your own files):
+   -------------------------------------------------------------------------- */
+/*
+.badges img[alt^="moderator/"] { content: url("custom_css_examples/images/mod.svg"); }
+.badges img[alt^="vip/"]       { content: url("custom_css_examples/images/vip.svg"); }
+*/
+
+/* --------------------------------------------------------------------------
+   7. A data: URL  (works everywhere, no file or upload needed)
+   --------------------------------------------------------------------------
+   The image itself is written into the CSS as text. Good for small images
+   like badges; big images make the CSS very long.
+
+   To turn a file into a data: URL:
+     Windows (PowerShell):
+       [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\mod.png")) | Set-Clipboard
+     macOS:   base64 -i mod.png | pbcopy
+     Linux:   base64 -w0 mod.png
+   Then paste the result after "data:image/png;base64," (use image/jpeg,
+   image/gif or image/webp for other formats).
+
+   Example: a tiny red square as the broadcaster badge, just to show the
+   format (remove the /* and *\/ lines around it to try it):
+   -------------------------------------------------------------------------- */
+/*
+.badges img[alt^="broadcaster/"] {
+  content: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR42mO4o6b2Hx9mGBkKAP8CicFFwifrAAAAAElFTkSuQmCC");
+  border-radius: 3px;
+}
+*/
