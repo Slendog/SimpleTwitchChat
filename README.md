@@ -4,9 +4,32 @@ A single-file Twitch chat overlay for an OBS browser source. It shows 7TV, BTTV 
 
 It connects to chat anonymously, so no login or token is needed. There's nothing to install.
 
-## OBS setup
+## Quick start: hosted version
 
-There are two ways to load the overlay in OBS. Both use a **Browser** source.
+The easiest way: no download, always the latest version.
+
+1. Open the **URL builder: https://slendog.github.io/SimpleTwitchChat/**
+2. Type your channel name and pick options. The live preview shows the real chat with your settings, and you can try the [example themes](custom_css_examples/README.md) there too.
+3. Click **Copy URL**.
+4. In OBS, add a **Browser** source, untick **Local file**, and paste the URL into **URL**. Set the size to about `450 × 900`.
+5. If you picked a theme, click **Copy CSS** and paste it into the source's **Custom CSS** box.
+
+You can also skip the builder and write the URL yourself, adding any [options](#options):
+
+```
+https://slendog.github.io/SimpleTwitchChat/chat.html?channel=YOURCHANNEL
+https://slendog.github.io/SimpleTwitchChat/chat.html?channel=YOURCHANNEL&size=26&fade=30
+```
+
+Good to know:
+
+- **Updates are automatic.** OBS loads the newest version each time the source starts. If you'd rather keep a fixed version, use your own copy (below).
+- **Settings go in the URL.** The `DEFAULTS` block can't be edited in the hosted file. Every setting is also a URL option, so nothing is missing.
+- **Custom CSS works the same** as with a local copy.
+
+## Using your own copy (OBS setup)
+
+Download `chat.html` from this repo if you want to edit the file, keep a fixed version, or not depend on GitHub Pages. There are two ways to load your copy in OBS. Both use a **Browser** source.
 
 | | Option A: URL | Option B: Local file |
 |---|---|---|

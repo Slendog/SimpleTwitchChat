@@ -10,6 +10,8 @@ Ready-made styles for `chat.html`. Each file is a full working example with comm
 
 `chat.html` itself stays unchanged. To go back to the normal look, delete what you pasted.
 
+To try them first, open the [URL builder](https://slendog.github.io/SimpleTwitchChat/), enter a channel and pick a theme under **Look**. The live preview shows it on real chat, and **Copy CSS** copies it for OBS.
+
 You can combine several examples by pasting them one after another, e.g. `01-bigger-text.css` with `03-message-boxes.css`. If two examples change the same thing, the one pasted last wins. If one of them uses `@import` (like `02-different-font.css`), that line has to go at the very top of the box.
 
 ## The examples
