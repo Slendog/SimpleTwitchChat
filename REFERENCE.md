@@ -29,6 +29,7 @@ The [URL builder](https://slendog.github.io/SimpleTwitchChat/) has a form for al
 | `paints`       | `1`          | Show 7TV paints and 7TV badges |
 | `hideCommands` | `1`          | Hide messages starting with `!` |
 | `notices`      | `1`          | Show sub, resub, gift and raid notices |
+| `emoteUpdates` | `15`         | Which emote change lines to show in chat. A sum of numbers, see [below](#emote-change-notices) |
 | `hideBots`     | *(see below)*| Extra usernames to hide, comma-separated |
 | `font`         | `Inter`      | Any CSS font-family, e.g. `Arial`, `Comic Sans MS` |
 | `gifs`         | `1`          | Show Twitch chat GIFs (GIPHY). `0` shows the `[Title GIF by …]` text instead |
@@ -39,6 +40,17 @@ The [URL builder](https://slendog.github.io/SimpleTwitchChat/) has a form for al
 **On/off options:** `0`, `false`, `no` or `off` turns one off. Any other value turns it on.
 
 **Hidden bots:** nightbot, streamelements, streamlabs, moobot, fossabot, wizebot, sery_bot, soundalerts and kofistreambot are hidden by default. Bots listed on the channel's BTTV page are also hidden automatically. `hideBots` adds names to this list. To unhide a default bot, remove it from `hideBots` in the `DEFAULTS` block (own copy only).
+
+<a id="emote-change-notices"></a>**Emote change notices:** `emoteUpdates` works like Linux file permissions (`chmod 755`). Each kind of line has a number, and you add up the ones you want:
+
+| Number | Line |
+|---|---|
+| `1` | Emote added |
+| `2` | Emote removed |
+| `4` | Emote renamed |
+| `8` | 7TV emote set switched |
+
+For example `0` = none, `1` = only added, `3` = added + removed, `5` = added + renamed, `15` = all (default). They cover 7TV, BTTV and FFZ channel emotes. The emotes themselves update either way.
 
 **Spaces in values** are written as `%20`, e.g. `font=Comic%20Sans%20MS`.
 
@@ -54,6 +66,7 @@ Put these after `chat.html` in your URL, e.g. `https://slendog.github.io/SimpleT
 ?channel=xqc&badges=0&notices=0&hideBots=mybot,otherbot
 ?channel=xqc&font=Comic%20Sans%20MS&emoteScale=2
 ?channel=xqc&loader=0
+?channel=xqc&emoteUpdates=3
 ```
 
 ### The DEFAULTS block
@@ -71,6 +84,7 @@ const DEFAULTS = {
   paints: true,
   hideCommands: true,
   notices: true,
+  emoteUpdates: 15,         // 1 added + 2 removed + 4 renamed + 8 set switched
   gifs: true,
   gifHeight: 150,
   prefetch: true,
@@ -105,6 +119,10 @@ Paste CSS into the browser source's **Custom CSS** box in OBS, replacing what's 
 | `.msg` | One message line |
 | `.msg.action` | `/me` messages |
 | `.msg.notice`, `.msg.notice .sys` | Sub/raid notice box and its text |
+| `.msg.emote-update` | Emote change line ("Slendog added 7TV emote …"). It also has the `notice` class, so notice styles apply to it too |
+| `.msg.emote-update[data-source="7tv"]` | Only one source: `7tv`, `bttv` or `ffz` |
+| `.msg.emote-update[data-action="added"]` | Only one kind: `added`, `removed`, `renamed`, `set` (7TV set switched) or `many` (more than 5 changes at once, shown as one summary line) |
+| `.emote-update .actor`, `.emote-update .emote-name` | Who made the change (7TV only) and the emote name |
 | `.msg.status` | "Connected to #channel" line |
 | `.msg.fading` | Message while fading out |
 | `.msg[data-user="ID"]` | Messages from one Twitch user ID (numeric). Find an ID at `https://api.ivr.fi/v2/twitch/user?login=USERNAME` |
@@ -173,6 +191,9 @@ These are set on `:root`:
 
 /* mention highlight */
 .mention { color: #ffcc00; }
+
+/* show emote changes, but not removals */
+.msg.emote-update[data-action="removed"] { display: none; }
 
 /* hide the loading bar */
 #loader { display: none !important; }

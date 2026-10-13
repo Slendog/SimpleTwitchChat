@@ -135,7 +135,7 @@ With your own copy you can also edit the `<style>` block at the top of `chat.htm
   - For everyone: `ffzW` (wide), `ffzX` (flip horizontally), `ffzY` (flip vertically), `ffzCursed`.
   - FFZ supporters only: `ffzHyper`, `ffzRainbow`, `ffzSpin`, `ffzSlide`, `ffzArrive`, `ffzLeave`, `ffzJam`, `ffzBounce`. When a non-supporter types one of these after an emote, the word is hidden and the emote isn't changed, same as in FFZ.
   - A modifier typed on its own, with no emote before it, shows as a normal emote.
-- **Live emote updates:** channel emote changes reach chat without reloading the overlay. See [Live emote updates](#live-emote-updates).
+- **Live emote updates:** channel emote changes reach chat without reloading the overlay, and are announced in chat. You choose which kinds of change are announced with `emoteUpdates`. See [Live emote updates](#live-emote-updates).
 - **Twitch chat GIFs:** GIFs that Tier 2 and Tier 3 subscribers send are shown as images below the message text, at `gifHeight` px high. The `[Title GIF by …]` text is replaced by the GIF.
 - **7TV personal emotes:** 7TV subscribers' personal emotes work, but only in their own messages. 7TV announces who owns which personal set live, through its EventAPI. If the set arrives after someone's first message, their messages on screen are redrawn with the emotes. A personal emote wins over a channel emote with the same name.
 - **7TV paints and 7TV badges** for each chatter.
@@ -170,6 +170,10 @@ Measured on a channel with about 1,100 emotes:
 | BTTV | Emote added, removed or renamed | Instant (BTTV socket) |
 | FFZ | Emote added or removed | Within 2 minutes (FFZ has no live feed, so it's re-checked) |
 | All | Full re-check of 7TV, BTTV, FFZ and badges | Every 15 minutes, in case a live connection dropped |
+
+Each change is also announced in chat, e.g. "Slendog added 7TV emote KEKW" with the emote shown. 7TV includes who made the change; BTTV and FFZ don't, so their lines just say "Added BTTV emote …". More than 5 changes at once (like a bulk import) become one summary line.
+
+Choose which lines to show with `emoteUpdates`, a sum like Linux permissions: `1` added, `2` removed, `4` renamed, `8` 7TV set switched. For example `emoteUpdates=3` shows added and removed emotes, `0` none, `15` all (default). The emotes update either way. The [URL builder](https://slendog.github.io/SimpleTwitchChat/) has a checkbox for each and works out the number. The 15-minute re-check doesn't announce anything.
 
 Changes apply to new messages; messages already on screen stay as they are. New emote images are downloaded in the background, and the saved copy of the emote lists is updated so the next start is current too.
 

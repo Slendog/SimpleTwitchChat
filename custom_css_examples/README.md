@@ -18,15 +18,17 @@ You can combine several examples by pasting them one after another, e.g. `01-big
 
 They're numbered from simplest to most advanced. If you're new to CSS, start at the top: each one adds only a couple of new ideas. Click a file name to open it.
 
-The [`images/`](images/) folder has the sample badge images used by example 11.
+The [`images/`](images/) folder has the sample badge and icon images used by example 11.
 
-The screenshots show the same made-up chat in each style: the "Connected" line, a few messages, a `/me` message, a sub notice and a name with a 7TV paint.
+The screenshots show the same made-up chat in each style: the "Connected" line, a few messages, a `/me` message, a sub notice, two emote change lines ("Streamer added 7TV emote …" and "Removed BTTV emote …") and a name with a 7TV paint.
+
+Every example also styles the emote change lines, in a section at the end (or next to the notices). They have the classes `notice` and `emote-update`, so they look like sub notices until a rule for `.msg.emote-update` changes them. See [REFERENCE.md](../REFERENCE.md#selectors) for their selectors.
 
 ### Basic: a few lines each
 
 #### [`01-bigger-text.css`](01-bigger-text.css): Bigger text
 
-Bigger text, emotes and GIFs.
+Bigger text, emotes and GIFs. Emote change lines stay a bit smaller.
 
 **You learn:** CSS variables, and why some of them need `!important`.
 
@@ -34,23 +36,23 @@ Bigger text, emotes and GIFs.
 
 #### [`02-different-font.css`](02-different-font.css): Different font
 
-Loads a font from Google Fonts (Nunito) and uses it for the whole chat.
+Loads a font from Google Fonts (Nunito) and uses it for the whole chat. Emote change lines are upright instead of italic.
 
-**You learn:** `@import`, font fallback lists.
+**You learn:** `@import`, font fallback lists, real and fake italics.
 
 <img src="02-different-font.png" alt="Different font example" width="330">
 
 #### [`03-message-boxes.css`](03-message-boxes.css): Message boxes
 
-A dark rounded box behind each message, as wide as its text.
+A dark rounded box behind each message, as wide as its text. Emote change lines get the same box with a gray edge, so only sub notices stay purple.
 
-**You learn:** `background`, `padding`, `border-radius`, transparency.
+**You learn:** `background`, `padding`, `border-radius`, transparency, which rule wins when two match.
 
 <img src="03-message-boxes.png" alt="Message boxes example" width="330">
 
 #### [`04-name-on-own-line.css`](04-name-on-own-line.css): Name on its own line
 
-The name on one line, the message indented below it.
+The name on one line, the message indented below it. On emote change lines, the person who made the change gets its own line too.
 
 **You learn:** How a message is built from parts, `display: block` vs inline.
 
@@ -58,7 +60,7 @@ The name on one line, the message indented below it.
 
 #### [`05-newest-on-top.css`](05-newest-on-top.css): Newest on top
 
-Chat pinned to the top with the newest message first, aligned right.
+Chat pinned to the top with the newest message first, aligned right. The colored edge of notices and emote change lines moves to the right side.
 
 **You learn:** Moving the chat column, `flex-direction`, `text-align`.
 
@@ -66,7 +68,7 @@ Chat pinned to the top with the newest message first, aligned right.
 
 #### [`06-hide-things.css`](06-hide-things.css): Hiding things
 
-A list of things you can hide: badges, the loading bar, notices, the status line, GIFs, `/me` messages, one user, 7TV paints. Pick the lines you want. The screenshot uses all of them.
+A list of things you can hide: badges, the loading bar, notices, emote change lines (all, or only some kinds), the status line, GIFs, `/me` messages, one user, 7TV paints. Pick the lines you want. The screenshot uses all of them.
 
 **You learn:** `display: none`, choosing elements with selectors.
 
@@ -76,7 +78,7 @@ A list of things you can hide: badges, the loading bar, notices, the status line
 
 #### [`07-dark-panel.css`](07-dark-panel.css): Dark panel
 
-A solid dark chat panel instead of text floating over the game, with every other row slightly lighter.
+A solid dark chat panel instead of text floating over the game, with every other row slightly lighter. Emote change lines are quiet gray rows.
 
 **You learn:** Page background, `:nth-child()`, `font-weight`.
 
@@ -84,7 +86,7 @@ A solid dark chat panel instead of text floating over the game, with every other
 
 #### [`08-speech-bubbles.css`](08-speech-bubbles.css): Speech bubbles
 
-White comic-style bubbles with a little tail.
+White comic-style bubbles with a little tail. Emote change lines get a pale blue bubble with no tail.
 
 **You learn:** `::after`, the CSS triangle trick, `position: relative/absolute`.
 
@@ -92,23 +94,23 @@ White comic-style bubbles with a little tail.
 
 #### [`09-neon.css`](09-neon.css): Neon
 
-Names glow in their own color, text has a soft blue glow.
+Names glow in their own color, text has a soft blue glow. Emote change lines glow in a different color for 7TV, BTTV and FFZ.
 
-**You learn:** Stacked `text-shadow`, `currentColor`, `filter: drop-shadow`.
+**You learn:** Stacked `text-shadow`, `currentColor`, `filter: drop-shadow`, selecting by `data-source`.
 
 <img src="09-neon.png" alt="Neon example" width="330">
 
 #### [`10-terminal.css`](10-terminal.css): Terminal
 
-Green monospace "hacker terminal" with a `>` prompt. Names are all one green, except 7TV paints, which stay (with `paints=0`, every name is green).
+Green monospace "hacker terminal" with a `>` prompt. Names are all one green, except 7TV paints, which stay (with `paints=0`, every name is green). Emote change lines look like log output, `[7tv] Streamer added …`, with removals in red.
 
-**You learn:** `::before` with text, overriding name colors, cross-platform font lists.
+**You learn:** `::before` with text, overriding name colors, cross-platform font lists, `attr()`.
 
 <img src="10-terminal.png" alt="Terminal example" width="330">
 
 #### [`11-custom-badges.css`](11-custom-badges.css): Custom badges and images
 
-Your own images for the moderator, VIP and broadcaster badges, hides the Prime and Turbo badges, and gives one specific person an extra badge (the star). Lists the names of all common Twitch badges so you can swap any of them. The sample images are in [`images/`](images/).
+Your own images for the moderator, VIP and broadcaster badges, hides the Prime and Turbo badges, gives one specific person an extra badge (the star), and puts an icon in front of each emote change line (added, removed, renamed, set switched). Lists the names of all common Twitch badges so you can swap any of them. The sample images are in [`images/`](images/).
 
 The second half explains where images can come from: a web address (works everywhere), a file on your own computer (only with your own copy of `chat.html`; which path to write for each OBS setup), or a `data:` URL that puts the image inside the CSS itself, with commands to make one on Windows, macOS and Linux.
 
@@ -120,7 +122,7 @@ The second half explains where images can come from: a web address (works everyw
 
 #### [`12-clouds.css`](12-clouds.css): Clouds
 
-The name sits above, and the message goes in a fluffy white cloud with a soft shadow. Sub notices get a lilac cloud.
+The name sits above, and the message goes in a fluffy white cloud with a soft shadow. Sub notices get a lilac cloud, emote change lines a pale blue one.
 
 The file has a second layout, with the name in a small pill on the cloud's top edge (right screenshot). To switch to it, change `@media not all` to `@media all` in section 7.
 

@@ -46,3 +46,14 @@ body {
 .msg.notice {
   background: rgba(145, 71, 255, .22);
 }
+
+/* Emote change lines are notices too (class "notice emote-update"), so they
+   got the purple box above. A quiet gray row instead keeps them from looking
+   like a sub. */
+.msg.emote-update {
+  background: rgba(255, 255, 255, .08);
+  border-left-color: #71717a;
+}
+.msg.emote-update .sys {
+  color: #a1a1aa;
+}

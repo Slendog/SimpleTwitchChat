@@ -10,6 +10,8 @@
      - currentColor: "whatever this element's text color is". Each name has
        its own color, so one rule gives every name a glow in its own color.
      - filter: drop-shadow, a shadow that follows an image's shape
+     - attribute selectors on data-source, to color emote change lines by
+       where the change came from
    ========================================================================== */
 
 :root {
@@ -48,3 +50,16 @@
   border-left-color: #c77dff;
   box-shadow: 0 0 10px rgba(199, 125, 255, .5);
 }
+
+/* Emote change lines: a neon edge in a different color per service.
+   data-source on each line says where the change came from: 7tv, bttv or
+   ffz. [data-source="bttv"] selects by it. The color is a variable, so each
+   source rule only changes that one value and the rest follows. */
+.msg.emote-update {
+  --neon: #2ee6d6;
+  border-left-color: var(--neon);
+  box-shadow: 0 0 10px var(--neon);
+}
+.msg.emote-update[data-source="bttv"] { --neon: #ff4d6d; }
+.msg.emote-update[data-source="ffz"]  { --neon: #a78bfa; }
+.msg.emote-update .emote-name { color: var(--neon); }

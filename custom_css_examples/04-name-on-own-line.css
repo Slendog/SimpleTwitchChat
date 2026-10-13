@@ -28,3 +28,19 @@
   font-size: .85em;       /* slightly smaller name, so the message stands out.
                              em = relative to the normal text size */
 }
+
+/* Emote change lines are built differently: one line of text with the
+   person who made the change (7TV only) at the start:
+
+     <div class="msg notice emote-update">
+       <div class="sys">
+         <span class="actor">Slendog</span> added 7TV emote
+         <span class="emote">…</span> <span class="emote-name">KEKW</span>
+       </div>
+     </div>
+
+   The same block trick gives them the name-on-its-own-line look too. */
+.msg.emote-update .actor {
+  display: block;
+  font-size: .85em;     /* same as .name above */
+}

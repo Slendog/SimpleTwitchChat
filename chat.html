@@ -22,6 +22,8 @@
     hideCommands  1/0 hide messages starting with "!"      (default 1)
     hideBots      comma list of extra usernames to hide
     notices       1/0 show sub/raid notices                (default 1)
+    emoteUpdates  which emote change lines to show, added up: (default 15 = all)
+                  1 added, 2 removed, 4 renamed, 8 7TV set switched; 0 = none
     font          CSS font-family                          (default Inter)
     gifs          1/0 show Twitch chat GIFs                (default 1)
     gifHeight     GIF height in px                         (default 150)
@@ -90,6 +92,7 @@
     border-radius: 4px;
   }
   .msg.notice .sys { color: #d6c2ff; font-weight: 500; font-style: italic; }
+  .msg.emote-update .actor, .msg.emote-update .emote-name { font-weight: 800; font-style: normal; }
   .msg.status { color: #aaa; font-weight: 500; font-size: .8em; }
 
   .badges img {
@@ -227,6 +230,7 @@ const DEFAULTS = {
   paints: true,
   hideCommands: true,
   notices: true,
+  emoteUpdates: 15,        // 1 added + 2 removed + 4 renamed + 8 set switched
   gifs: true,
   gifHeight: 150,
   prefetch: true,
@@ -396,20 +400,26 @@ function findEmote(word, scopes) {
 // BTTV global overlay emotes (they render on top of the previous emote).
 const BTTV_ZERO_WIDTH = new Set(['SoSnowy', 'IceCold', 'SantaHat', 'TopHat', 'ReinDeer', 'CandyCane', 'cvMask', 'cvHazmat']);
 
+// The add* functions return the stored entry.
 function add7tv(map, e) {
-  map.set(e.name, {
+  const entry = {
+    id: e.id,
     name: e.name,
     url: stvAsset(e.data?.host?.url || `//cdn.7tv.app/emote/${e.id}`, HI_RES ? '4x' : '2x'),
     zw: Boolean((e.flags & 1) || (e.data?.flags & 256)),
-  });
+  };
+  map.set(e.name, entry);
+  return entry;
 }
 function addBttv(map, e) {
-  map.set(e.code, {
+  const entry = {
     id: e.id,
     name: e.code,
     url: `https://cdn.betterttv.net/emote/${e.id}/${HI_RES ? '3x' : '2x'}`,
     zw: BTTV_ZERO_WIDTH.has(e.code) || e.modifier === true,
-  });
+  };
+  map.set(e.code, entry);
+  return entry;
 }
 
 // FFZ modifier flags. Hidden modifiers only change the previous emote;
@@ -428,6 +438,7 @@ function addFfz(map, e) {
   if (url?.startsWith('//')) url = 'https:' + url;
   const flags = e.modifier ? (e.modifier_flags || 0) : 0;
   map.set(e.name, {
+    id: e.id,
     name: e.name,
     url,
     zw: e.modifier === true && !(flags & FFZ_HIDDEN),
@@ -511,14 +522,32 @@ function onEntitlement(type, obj) {
   }
 }
 
+// Applies a 7TV set change and returns what changed, for emoteNotice().
+// Changes already applied (the same event delivered twice) aren't returned again.
 function applySetUpdate(map, body) {
-  for (const p of body.pushed || []) if (p.key === 'emotes' && p.value) add7tv(map, p.value);
-  for (const p of body.pulled || []) if (p.key === 'emotes' && p.old_value) map.delete(p.old_value.name);
-  for (const u of body.updated || []) {
-    if (u.key !== 'emotes') continue;
-    if (u.old_value) map.delete(u.old_value.name);
-    if (u.value) add7tv(map, u.value);
+  const changes = [];
+  for (const p of body.pushed || []) {
+    if (p.key !== 'emotes' || !p.value) continue;
+    const known = map.get(p.value.name)?.id === p.value.id;
+    const emote = add7tv(map, p.value);
+    if (!known) changes.push({ action: 'added', emote });
   }
+  for (const p of body.pulled || []) {
+    if (p.key !== 'emotes' || !p.old_value) continue;
+    const emote = map.get(p.old_value.name);
+    if (!emote) continue;
+    map.delete(emote.name);
+    changes.push({ action: 'removed', emote });
+  }
+  for (const u of body.updated || []) {
+    if (u.key !== 'emotes' || !u.value) continue;
+    const oldName = u.old_value?.name;
+    const known = map.get(u.value.name)?.id === u.value.id && !map.has(oldName);
+    if (oldName && map.get(oldName)?.id === u.value.id) map.delete(oldName);
+    const emote = add7tv(map, u.value);
+    if (!known && oldName && oldName !== emote.name) changes.push({ action: 'renamed', emote, oldName });
+  }
+  return changes;
 }
 
 // ---------------------------------------------------------------- live sockets
@@ -543,7 +572,7 @@ function on7tvEvent(m) {
 
   if (type === 'emote_set.update') {
     if (body.id === channel.stvSetId) {
-      applySetUpdate(emoteMaps.stvChannel, body);
+      emoteNotice('7tv', actorName(body.actor), applySetUpdate(emoteMaps.stvChannel, body));
       channelChanged('7TV emote set updated');
     } else if (personalSets.has(body.id)) {
       applySetUpdate(personalSets.get(body.id), body);
@@ -551,7 +580,11 @@ function on7tvEvent(m) {
     }
   } else if (type === 'user.update' && body.id === channel.stvUserId) {
     // Covers the streamer switching their active emote set; just reload it.
-    load7tvChannel().then(() => channelChanged('7TV user updated'), e => console.warn('7tv reload', e));
+    const oldSet = channel.stvSetId;
+    load7tvChannel().then((d) => {
+      if (channel.stvSetId && channel.stvSetId !== oldSet) setNotice(actorName(body.actor), d.emote_set?.name);
+      channelChanged('7TV user updated');
+    }, e => console.warn('7tv reload', e));
   } else if (type === 'emote_set.create' && body.object?.id) {
     const map = personalSet(body.object.id);
     (body.object.emotes || []).forEach(e => add7tv(map, e));
@@ -590,17 +623,28 @@ function connectBttvEvents() {
       const d = m.data || {};
       if (d.channel !== room) return;
       const map = emoteMaps.bttvChannel;
-      const removeId = (id) => { for (const [k, e] of map) if (e.id === id) map.delete(k); };
+      // Returns the removed entry, if the emote was there.
+      const removeId = (id) => {
+        let found;
+        for (const [k, e] of map) if (e.id === id) { found = e; map.delete(k); }
+        return found;
+      };
+      const changes = [];
       if (m.name === 'emote_create' && d.emote) {
-        addBttv(map, d.emote);
+        const known = removeId(d.emote.id);
+        const emote = addBttv(map, d.emote);
+        if (!known) changes.push({ action: 'added', emote });
       } else if (m.name === 'emote_update' && d.emote) {
-        removeId(d.emote.id);
-        addBttv(map, d.emote);
+        const old = removeId(d.emote.id);
+        const emote = addBttv(map, d.emote);
+        if (old && old.name !== emote.name) changes.push({ action: 'renamed', emote, oldName: old.name });
       } else if (m.name === 'emote_delete') {
-        removeId(d.emoteId);
+        const emote = removeId(d.emoteId);
+        if (emote) changes.push({ action: 'removed', emote });
       } else {
         return;
       }
+      emoteNotice('bttv', null, changes);
       channelChanged('BTTV ' + m.name);
     },
   });
@@ -705,6 +749,7 @@ async function load7tvChannel() {
   fillMap('stvChannel', d.emote_set?.emotes || [], add7tv);
   track('stvUserId', d.user?.id || null);
   track('stvSetId', d.emote_set?.id || null);
+  return d;
 }
 
 async function loadBttvChannel() {
@@ -716,6 +761,13 @@ async function loadBttvChannel() {
 async function loadFfzChannel() {
   const d = await getJSON(`https://api.frankerfacez.com/v1/room/id/${channel.roomId}`).catch(orEmpty({}));
   fillMap('ffzChannel', ffzEmotes(d.sets), addFfz);
+}
+
+// FFZ has no live feed, so its changes are found by comparing the lists.
+async function pollFfzChannel() {
+  const before = emoteMaps.ffzChannel;
+  await loadFfzChannel();
+  emoteNotice('ffz', null, diffEmotes(before, emoteMaps.ffzChannel));
 }
 
 async function loadChannelBadges() {
@@ -750,7 +802,7 @@ async function loadChannel(roomId) {
 
   connect7tvEvents();
   connectBttvEvents();
-  setInterval(() => refreshChannel([loadFfzChannel]), FFZ_REFRESH_MS);
+  setInterval(() => refreshChannel([pollFfzChannel]), FFZ_REFRESH_MS);
   setInterval(() => refreshChannel([load7tvChannel, loadBttvChannel, loadChannelBadges]), FULL_REFRESH_MS);
 }
 
@@ -989,6 +1041,17 @@ function parseGifs(tag) {
   return out;
 }
 
+function emoteSpan(e) {
+  const outer = document.createElement('span');
+  outer.className = 'emote';
+  outer.title = e.name;
+  const stack = document.createElement('span');
+  stack.className = 'stack';
+  stack.appendChild(makeImg(e.url, e.name));
+  outer.appendChild(stack);
+  return { outer, stack };
+}
+
 // msg: { text, tags, login }. Kept on the element so it can be re-rendered.
 function renderBody(msg) {
   const { text, tags, login } = msg;
@@ -1028,13 +1091,7 @@ function renderBody(msg) {
       return;
     }
     flushSpace();
-    const outer = document.createElement('span');
-    outer.className = 'emote';
-    outer.title = e.name;
-    const stack = document.createElement('span');
-    stack.className = 'stack';
-    stack.appendChild(makeImg(e.url, e.name));
-    outer.appendChild(stack);
+    const { outer, stack } = emoteSpan(e);
     frag.appendChild(outer);
     lastEmote = { outer, stack, wide: false };
   };
@@ -1155,6 +1212,81 @@ function status(text, ttl = 5000) {
   el.textContent = text;
   addLine(el);
   if (ttl) setTimeout(() => el.remove(), ttl);
+}
+
+// ---------------------------------------------------------------- emote change notices
+// "Slendog added 7TV emote [img] KEKW". 7TV says who made the change; BTTV and FFZ don't.
+// changes: [{ action: 'added' | 'removed' | 'renamed', emote, oldName? }]
+const SOURCE_LABELS = { '7tv': '7TV', bttv: 'BTTV', ffz: 'FFZ' };
+const MAX_EMOTE_NOTICES = 5; // more changes at once become one summary line
+
+// emoteUpdates is a sum of these, like chmod permissions: 5 = added + renamed.
+const EMOTE_UPDATE_BITS = { added: 1, removed: 2, renamed: 4, set: 8 };
+const showsUpdate = (action) => (CONFIG.emoteUpdates & EMOTE_UPDATE_BITS[action]) !== 0;
+
+const actorName = (user) => user?.display_name || user?.username || null;
+
+function textSpan(className, text) {
+  const span = document.createElement('span');
+  span.className = className;
+  span.textContent = text;
+  return span;
+}
+
+function emoteUpdateLine(source, action, parts) {
+  const el = document.createElement('div');
+  el.className = 'msg notice emote-update';
+  el.dataset.source = source;
+  el.dataset.action = action;
+  const sys = document.createElement('div');
+  sys.className = 'sys';
+  sys.append(...parts);
+  el.appendChild(sys);
+  addLine(el);
+}
+
+// "Slendog added " or, with no actor, "Added ".
+const lead = (actor, verb) => actor
+  ? [textSpan('actor', actor), ` ${verb} `]
+  : [verb[0].toUpperCase() + verb.slice(1) + ' '];
+
+function emoteNotice(source, actor, changes) {
+  changes = changes.filter(c => showsUpdate(c.action));
+  if (!changes.length) return;
+  const label = SOURCE_LABELS[source];
+  if (changes.length > MAX_EMOTE_NOTICES) {
+    const counts = {};
+    for (const c of changes) counts[c.action] = (counts[c.action] || 0) + 1;
+    const summary = Object.entries(counts).map(([action, n]) => `${n} ${action}`).join(', ');
+    emoteUpdateLine(source, 'many', [...lead(actor, 'changed'), `${changes.length} ${label} emotes (${summary})`]);
+    return;
+  }
+  for (const { action, emote, oldName } of changes) {
+    emoteUpdateLine(source, action, [
+      ...lead(actor, action), `${label} emote `, emoteSpan(emote).outer, ' ',
+      ...(action === 'renamed' ? [textSpan('emote-name', oldName), ' to '] : []),
+      textSpan('emote-name', emote.name),
+    ]);
+  }
+}
+
+function setNotice(actor, setName) {
+  if (!showsUpdate('set')) return;
+  emoteUpdateLine('7tv', 'set', [...lead(actor, 'switched'), 'to 7TV emote set ', textSpan('emote-name', setName || 'unnamed')]);
+}
+
+// Changes between two lists of the same channel, matched by emote id.
+function diffEmotes(before, after) {
+  const byId = (map) => new Map([...map.values()].map(e => [e.id, e]));
+  const old = byId(before), now = byId(after);
+  const changes = [];
+  for (const [id, emote] of now) {
+    const prev = old.get(id);
+    if (!prev) changes.push({ action: 'added', emote });
+    else if (prev.name !== emote.name) changes.push({ action: 'renamed', emote, oldName: prev.name });
+  }
+  for (const [id, emote] of old) if (!now.has(id)) changes.push({ action: 'removed', emote });
+  return changes;
 }
 
 // ---------------------------------------------------------------- IRC

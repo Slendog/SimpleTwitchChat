@@ -9,6 +9,7 @@
      - ::before with text content, to add characters that aren't in the page
      - overriding the overlay's per-name colors (inline styles → !important)
      - a font list that works on Windows, macOS and Linux
+     - attr() to show an attribute's value as text
    ========================================================================== */
 
 :root {
@@ -73,6 +74,18 @@ body {
 }
 .msg.notice .sys { color: #33ff66; }
 .msg.notice::before { content: none; }   /* its text starts on its own line, so the prompt would sit alone */
+
+/* Emote change lines read like log output: "[7tv] Slendog added …".
+   attr(data-source) inserts the value of the line's data-source attribute
+   (7tv, bttv or ffz) as text. The text after it (.sys) is a block, which would
+   push it onto its own line, so it's made inline. This rule comes after
+   .msg.notice::before, so it wins over the "no prompt" rule there. */
+.msg.emote-update::before { content: "[" attr(data-source) "] "; }
+.msg.emote-update .sys { display: inline; }
+
+/* Removed emotes in red, like an error. data-action is added, removed,
+   renamed, set or many. */
+.msg.emote-update[data-action="removed"] .sys { color: #ff5f56; }
 
 /* Status line ("Connected to #channel") looks like a system message: no
    prompt, dimmer. */

@@ -64,6 +64,14 @@
 }
 .msg.notice .sys { color: #6b3fd4; }
 
+/* Emote change lines: a pale blue bubble with no tail. The tail means
+   "someone said this", and these lines come from the overlay, not a chatter.
+   They have the notice class too, so this has to come after .msg.notice to
+   win over it. */
+.msg.emote-update { --bubble: #e3f0ff; }
+.msg.emote-update .sys { color: #2b5c99; }
+.msg.emote-update::after { display: none; }
+
 /* The "Connected to #channel" line isn't a chat message: no bubble, no tail. */
 .msg.status { background: none; color: #ddd; text-shadow: 0 0 2px #000; padding: 0 4px; }
 .msg.status::after { display: none; }

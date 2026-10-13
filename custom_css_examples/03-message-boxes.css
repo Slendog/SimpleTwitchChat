@@ -26,3 +26,18 @@
 :root {
   --outline: none;
 }
+
+/* Sub notices and emote change lines keep the overlay's purple notice box:
+   .msg.notice is more specific than .msg (two classes beat one), so the box
+   above doesn't replace it. Emote change lines also have the class
+   emote-update. Here they get the same dark box as messages with a gray edge,
+   so only sub notices stand out. .msg.emote-update has two classes as well;
+   when two rules are equally specific, the later one wins, and Custom CSS
+   comes after the overlay's own styles. */
+.msg.emote-update {
+  background: rgba(0, 0, 0, .55);
+  border-left-color: rgba(255, 255, 255, .45);
+}
+.msg.emote-update .sys {
+  color: #ddd;          /* instead of the light purple notice text */
+}

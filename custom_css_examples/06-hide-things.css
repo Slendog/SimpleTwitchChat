@@ -13,8 +13,18 @@
    hides it from its script. Same as the loader=0 URL option. */
 #loader { display: none !important; }
 
-/* Sub, raid and gift notices. Same as notices=0. */
-.msg.notice { display: none; }
+/* Sub, raid and gift notices. Same as notices=0. ":not(.emote-update)"
+   keeps the emote change lines, which also have the notice class. */
+.msg.notice:not(.emote-update) { display: none; }
+
+/* "Slendog added 7TV emote …" lines. Same as emoteUpdates=0. */
+.msg.emote-update { display: none; }
+/* Or hide only some of them. data-action is added, removed, renamed, set
+   (7TV set switched) or many (more than 5 changes at once); data-source is
+   7tv, bttv or ffz. The emoteUpdates URL option can also pick kinds.
+   .msg.emote-update[data-action="removed"] { display: none; }
+   .msg.emote-update[data-source="ffz"]     { display: none; }
+   .msg.emote-update .emote                 { display: none; }   just the emote picture */
 
 /* The "Connected to #channel" line. */
 .msg.status { display: none; }

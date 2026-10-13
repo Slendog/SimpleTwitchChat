@@ -310,6 +310,13 @@
   text-shadow: 0 0 1px rgba(0, 0, 0, .75), 0 1px 1px rgba(0, 0, 0, .3);
 }
 
+/* Emote change lines ("Slendog added 7TV emote …") are notices too (class
+   "notice emote-update"), so they become one cloud the same way. A pale blue
+   cloud tells them apart from subs. Same trick as above: only --cloud
+   changes. */
+.msg.emote-update { --cloud: rgba(222, 238, 255, .97); }
+.msg.emote-update .sys { color: #2f5f9e; }
+
 /* The "Connected to #channel" line has no .body, so it gets no cloud and
    needs nothing here. */
 

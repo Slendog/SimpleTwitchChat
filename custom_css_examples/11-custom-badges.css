@@ -3,7 +3,8 @@
    ==========================================================================
 
    Swaps Twitch's moderator, VIP and broadcaster badges for your own images,
-   hides a few badges, and gives one specific person an extra badge. The end
+   hides a few badges, gives one specific person an extra badge, and puts an
+   icon on emote change lines. The end
    of the file explains where the images can come from: the web, files on
    your own computer, or text inside the CSS itself.
 
@@ -85,7 +86,40 @@
 
 
 /* --------------------------------------------------------------------------
-   4. Badge size
+   4. Icons on emote change lines
+   Emote change lines ("Slendog added 7TV emote …") have no badges, but
+   data-action says what happened: added, removed, renamed, set (7TV set
+   switched) or many (more than 5 changes at once). ::before on the line's
+   text (.sys) draws an icon in front of it, the same way as the star in 3.
+   -------------------------------------------------------------------------- */
+.msg.emote-update .sys::before {
+  content: "";
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 6px;
+  vertical-align: middle;
+  position: relative;
+  top: -.08em;
+  background: center / contain no-repeat;
+}
+.msg.emote-update[data-action="added"] .sys::before {
+  background-image: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/emote-added.svg");
+}
+.msg.emote-update[data-action="removed"] .sys::before {
+  background-image: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/emote-removed.svg");
+}
+.msg.emote-update[data-action="renamed"] .sys::before {
+  background-image: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/emote-renamed.svg");
+}
+.msg.emote-update[data-action="set"] .sys::before,
+.msg.emote-update[data-action="many"] .sys::before {
+  background-image: url("https://slendog.github.io/SimpleTwitchChat/custom_css_examples/images/emote-set.svg");
+}
+
+
+/* --------------------------------------------------------------------------
+   5. Badge size
    em = relative to the text size. The overlay uses 1.05em.
    -------------------------------------------------------------------------- */
 /* .badges img { height: 1.3em; } */
@@ -99,14 +133,14 @@
    fits how you load the overlay in OBS.
 
    --------------------------------------------------------------------------
-   5. An image on the web  (works everywhere)
+   6. An image on the web  (works everywhere)
    --------------------------------------------------------------------------
    What the rules above use. Upload your image somewhere public and paste its
    address, starting with https://. Right-click an image in your browser →
    "Copy image address" gives you one.
 
    --------------------------------------------------------------------------
-   6. A file on your computer  (only with your own copy of chat.html)
+   7. A file on your computer  (only with your own copy of chat.html)
    --------------------------------------------------------------------------
    Easiest: a path RELATIVE to chat.html. It works with "Local file" ticked
    or unticked, on Windows, macOS and Linux, and keeps working if you move
@@ -124,7 +158,7 @@
 
    Why not with the hosted version (https://slendog.github.io/…)? A web page
    isn't allowed to read files from your computer. Browsers block that on
-   purpose, so no website you visit can read your files. Use 5 or 7 instead.
+   purpose, so no website you visit can read your files. Use 6 or 8 instead.
 
    Example, using the sample images that come with the download (remove the
    /* and *\/ lines around it, and change the paths to your own files):
@@ -135,7 +169,7 @@
 */
 
 /* --------------------------------------------------------------------------
-   7. A data: URL  (works everywhere, no file or upload needed)
+   8. A data: URL  (works everywhere, no file or upload needed)
    --------------------------------------------------------------------------
    The image itself is written into the CSS as text. Good for small images
    like badges; big images make the CSS very long.

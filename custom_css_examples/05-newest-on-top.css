@@ -22,3 +22,15 @@
   align-items: flex-end;            /* each line hugs the right edge */
   text-align: right;                /* wrapped lines also line up on the right */
 }
+
+/* Sub notices and emote change lines have a colored edge on the left. With
+   right-aligned chat it fits better on the right, next to the screen edge.
+   "border-left: 0" removes the overlay's left edge, and border-right draws a
+   new one (width, style, color). */
+.msg.notice {
+  border-left: 0;
+  border-right: 3px solid #9147ff;
+}
+/* Emote change lines also have the notice class. To give them a different
+   edge color, add for example:
+   .msg.emote-update { border-right-color: #888; } */

@@ -25,3 +25,15 @@
 
 /* A font installed on your computer works too, without @import:
    :root { --font: "Comic Sans MS", sans-serif !important; } */
+
+/* Sub notices and emote change lines are written in italics. The @import
+   above only downloads upright Nunito, so the browser makes italics itself by
+   slanting the letters ("fake italic"), which looks a bit rough. Two fixes:
+     - download real italics too: replace "Nunito:wght@600;800" in the
+       @import with "Nunito:ital,wght@0,600;0,800;1,600;1,800"
+       (1 = italic, 0 = upright, each with its weight)
+     - or turn italics off where you don't want them, like here for the
+       emote change lines. Use .msg.notice .sys for sub notices as well. */
+.msg.emote-update .sys {
+  font-style: normal;
+}

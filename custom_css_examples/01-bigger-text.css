@@ -22,3 +22,11 @@
                                 so 2em = twice as tall as the text (default 1.6em) */
   --gif: 200px !important;   /* height of Twitch chat GIFs (default 150px) */
 }
+
+/* Emote change lines ("Slendog added 7TV emote …") grow with --size like the
+   rest of chat. To keep them smaller, give them their own font-size. em is
+   relative to the normal text size, so .8em = 80%. Their emote picture is
+   sized with --emote, which is in em too, so it shrinks along with them. */
+.msg.emote-update {
+  font-size: .8em;
+}

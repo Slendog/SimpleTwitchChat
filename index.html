@@ -190,6 +190,14 @@
             <label class="check"><input type="checkbox" data-opt="prefetch"><span>Preload emotes<small class="hint">Emotes show instantly the first time</small></span></label>
           </div>
 
+          <h3 class="hint" style="margin:18px 0 8px;font-weight:600">Emote change notices <span id="emote-bits" style="font-weight:400"></span></h3>
+          <div class="checks">
+            <label class="check"><input type="checkbox" data-bit="1"><span>Emote added<small class="hint">1</small></span></label>
+            <label class="check"><input type="checkbox" data-bit="2"><span>Emote removed<small class="hint">2</small></span></label>
+            <label class="check"><input type="checkbox" data-bit="4"><span>Emote renamed<small class="hint">4</small></span></label>
+            <label class="check"><input type="checkbox" data-bit="8"><span>7TV emote set switched<small class="hint">8</small></span></label>
+          </div>
+
           <label class="field" style="margin-top:16px">Also hide these users
             <input type="text" data-opt="hideBots" placeholder="mybot, otherbot" spellcheck="false">
             <small>Comma-separated. Nightbot, StreamElements, Streamlabs, Moobot, Fossabot and other common bots are already hidden.</small>
@@ -263,10 +271,10 @@
 // Must match DEFAULTS in chat.html. Only values that differ get into the URL.
 const DEFAULTS = {
   size: 20, emoteScale: 1.6, max: 40, fade: 0, font: '', gifHeight: 150,
-  badges: true, paints: true, notices: true, gifs: true, hideCommands: true, loader: true, prefetch: true,
+  badges: true, paints: true, notices: true, emoteUpdates: 15, gifs: true, hideCommands: true, loader: true, prefetch: true,
   hideBots: '',
 };
-const ORDER = ['size', 'emoteScale', 'max', 'fade', 'font', 'badges', 'paints', 'notices', 'gifs', 'gifHeight', 'hideCommands', 'loader', 'prefetch', 'hideBots'];
+const ORDER = ['size', 'emoteScale', 'max', 'fade', 'font', 'badges', 'paints', 'notices', 'emoteUpdates', 'gifs', 'gifHeight', 'hideCommands', 'loader', 'prefetch', 'hideBots'];
 
 const THEMES = [
   ['', 'None (default look, recommended CSS)'],
@@ -287,13 +295,17 @@ const THEME_NOTES = {
   '01-bigger-text': 'Overrides the size options above.',
   '': 'No theme: use this as the Custom CSS. It replaces OBS’s default CSS.',
   '02-different-font': 'The @import line must be the first thing in the Custom CSS box.',
-  '11-custom-badges': 'Only shows when a mod, VIP or the streamer chats. Swap in your own image addresses; the end of the CSS explains using files from your PC.',
+  '11-custom-badges': 'Badges only show when a mod, VIP or the streamer chats, and icons when an emote changes. Swap in your own image addresses; the end of the CSS explains using files from your PC.',
   '12-clouds:pill': 'Same file as Clouds with the optional layout in section 7 switched on.',
 };
 
 const $ = (id) => document.getElementById(id);
 const form = $('form'), channelEl = $('channel'), urlEl = $('url'), frame = $('frame');
 const optEls = [...document.querySelectorAll('[data-opt]')];
+// emoteUpdates is one number: the sum of the ticked boxes' values, like chmod.
+const bitEls = [...document.querySelectorAll('[data-bit]')];
+const emoteBits = () => bitEls.reduce((n, el) => n + (el.checked ? +el.dataset.bit : 0), 0);
+const setEmoteBits = (n) => bitEls.forEach(el => { el.checked = (n & +el.dataset.bit) !== 0; });
 const base = new URL('chat.html', location.href).href;
 const LOGIN = /^[a-z0-9_]{1,25}$/;
 
@@ -312,6 +324,10 @@ const enc = (v) => encodeURIComponent(v).replace(/%2C/gi, ',');
 function buildUrl(ch) {
   const parts = ['channel=' + enc(ch || 'YOURCHANNEL')];
   for (const k of ORDER) {
+    if (k === 'emoteUpdates') {
+      if (emoteBits() !== DEFAULTS[k]) parts.push(`${k}=${emoteBits()}`);
+      continue;
+    }
     const el = optEls.find(e => e.dataset.opt === k);
     if (el.type === 'checkbox') {
       if (el.checked !== DEFAULTS[k]) parts.push(`${k}=${el.checked ? 1 : 0}`);
@@ -344,6 +360,8 @@ function update() {
 
   const state = { channel: channelEl.value };
   for (const el of optEls) state[el.dataset.opt] = el.type === 'checkbox' ? el.checked : el.value;
+  state.emoteUpdates = emoteBits();
+  $('emote-bits').textContent = `(emoteUpdates=${emoteBits()})`;
   state.theme = $('theme').value; state.bg = $('bg').value;
   store.set(state);
 
@@ -442,6 +460,7 @@ function setDefaults() {
     const d = DEFAULTS[el.dataset.opt];
     if (el.type === 'checkbox') el.checked = d; else el.value = '';
   }
+  setEmoteBits(DEFAULTS.emoteUpdates);
 }
 setDefaults();
 const saved = store.get();
@@ -451,6 +470,7 @@ for (const el of optEls) {
   if (v === undefined) continue;
   if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
 }
+if (typeof saved.emoteUpdates === 'number') setEmoteBits(saved.emoteUpdates);
 if (saved.bg) $('bg').value = saved.bg;
 if (saved.theme && THEMES.some(t => t[0] === saved.theme)) $('theme').value = saved.theme;
 $('stage').className = 'stage bg-' + $('bg').value;
